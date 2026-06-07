@@ -597,9 +597,6 @@ public final class StructureRecipe {
                         group.blockId()
                 ));
                 lines.add(Component.translatable("jei_structures.block_loot.loot_table", detail.lootTableId));
-                for (StructureIndexCache.LootItemEntry entry : detail.entries) {
-                    lines.add(buildLootEntryLine(entry));
-                }
                 blocks.add(ContentBlock.combinedGroup(
                         first ? StructureTextHelper.component("jei_structures.section.block_loot_tables") : Component.empty(),
                         lines,
@@ -737,33 +734,6 @@ public final class StructureRecipe {
         lines.add(Component.translatable("jei_structures.tooltip.loot_chance", notesText(entry.chanceNotes, entry.chanceText)).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("jei_structures.tooltip.loot_count", notesText(entry.countNotes, entry.countText)).withStyle(ChatFormatting.GRAY));
         return List.copyOf(lines);
-    }
-
-    private Component buildLootEntryLine(StructureIndexCache.LootItemEntry entry) {
-        if (entry == null) {
-            return Component.empty();
-        }
-        String itemName = StructureTextHelper.getItemName(entry.itemId);
-        List<Component> parts = new ArrayList<>();
-        parts.add(notesComponent(entry.chanceNotes, entry.chanceText));
-        parts.add(notesComponent(entry.countNotes, entry.countText));
-        if (entry.quality != 0) {
-            parts.add(Component.translatable("jei_structures.loot_entry.quality", entry.quality));
-        }
-        if (entry.rollsText != null && !entry.rollsText.isBlank() && !"1".equals(entry.rollsText)) {
-            parts.add(Component.translatable("jei_structures.loot_entry.rolls", entry.rollsText));
-        }
-        if (entry.bonusRollsText != null && !entry.bonusRollsText.isBlank() && !"0".equals(entry.bonusRollsText)) {
-            parts.add(Component.translatable("jei_structures.loot_entry.bonus_rolls", entry.bonusRollsText));
-        }
-        Component line = Component.literal(itemName);
-        for (Component part : parts) {
-            if (part == null || part.getString().isBlank()) {
-                continue;
-            }
-            line = line.copy().append(Component.literal(" | ")).append(part);
-        }
-        return line;
     }
 
     private static Component notesComponent(List<StructureIndexCache.LootTextEntry> notes, String fallbackText) {
