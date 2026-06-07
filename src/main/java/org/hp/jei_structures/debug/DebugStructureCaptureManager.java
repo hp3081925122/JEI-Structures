@@ -261,6 +261,7 @@ public final class DebugStructureCaptureManager {
             Files.createDirectories(this.outputRoot);
             this.lootResolver = new LootTableItemResolver(server.getResourceManager(), server.registryAccess().registryOrThrow(Registries.ITEM));
             this.cooldownTicks = 0;
+            DebugCaptureOptimizationGuard.enable(this.playerId);
             DebugStructureCheckConcurrency.enable();
         }
 
@@ -1081,6 +1082,7 @@ public final class DebugStructureCaptureManager {
                 DebugStructureCaptureExport.writeFailureFile(outputRoot, "failed_structures.json", failures);
                 timingStats.writeMillis += System.currentTimeMillis() - start;
             } finally {
+                DebugCaptureOptimizationGuard.disable();
                 restorePlayer(server);
                 cleanupSession();
             }
@@ -1120,6 +1122,8 @@ public final class DebugStructureCaptureManager {
                 DebugLocateRadiusLimiter.end(request.requestId());
             }
             activeLocateRequests.clear();
+            JeiStructures.LOGGER.info("结构调试跳过玩家同步更新次数：{}", DebugCaptureOptimizationGuard.getSuppressedPlayerSyncCount());
+            DebugCaptureOptimizationGuard.disable();
             DebugStructureCheckConcurrency.disable();
             cleanedUp = true;
         }
@@ -1241,8 +1245,19 @@ public final class DebugStructureCaptureManager {
             if (player == null) {
                 return teleportPos;
             }
+            ServerLevel targetLevel = locatedStructure.level();
+            String structureId = currentTarget != null ? currentTarget.structureId().toString() : currentAttempt.aggregate.structureId;
+            JeiStructures.LOGGER.info(
+                    "结构调试传送到结构：structure={}，from={}，to={}，目标点=({}, {}, {})",
+                    structureId,
+                    player.serverLevel().dimension().location(),
+                    targetLevel.dimension().location(),
+                    teleportPos.getX(),
+                    teleportPos.getY(),
+                    teleportPos.getZ()
+            );
             player.teleportTo(
-                    locatedStructure.level(),
+                    targetLevel,
                     teleportPos.getX() + 0.5D,
                     teleportPos.getY(),
                     teleportPos.getZ() + 0.5D,

@@ -6,6 +6,7 @@
   "refmap": "jei_structures.refmap.json",
   "mixins": [
     "AsyncLocatorConfigDefaultMixin",
+    "ChunkMapCaptureSyncMixin",
     "ChunkGeneratorLocateRadiusMixin",
     "StructureCheckConcurrencyMixin"
   ],
