@@ -34,6 +34,7 @@ import org.hp.jei_structures.data.LootTableItemResolver;
 import org.hp.jei_structures.data.StoredItemNbtReader;
 import org.hp.jei_structures.data.StructureBindingPaths;
 import org.hp.jei_structures.data.StructureIndexCache;
+import org.hp.jei_structures.config.JeiStructuresConfig;
 import org.hp.jei_structures.debug.DebugStructureCaptureTargets.StructureTarget;
 
 import java.nio.file.Files;
@@ -59,7 +60,6 @@ public final class DebugStructureCaptureManager {
     private static final int END_OUTER_ISLAND_OFFSET_X = 1200;
     private static final int BASE_COOLDOWN_TICKS = 5;
     private static final int BASE_MOB_WAIT_TICKS = 20;
-    private static final int CHUNK_LOADS_PER_TICK = 2;
     private static final int MAX_CONCURRENT_LOCATE_REQUESTS = 3;
     private static final long LOCATE_REQUEST_TIMEOUT_MILLIS = 20_000L;
     private static final long CHUNK_LOAD_SLOW_WARN_MILLIS = 500L;
@@ -470,7 +470,7 @@ public final class DebugStructureCaptureManager {
                 return false;
             }
             int startIndex = currentAttempt.loadedChunkCount;
-            int endIndex = Math.min(startIndex + CHUNK_LOADS_PER_TICK, totalChunks);
+            int endIndex = Math.min(startIndex + JeiStructuresConfig.captureChunkLoadsPerTick(), totalChunks);
             JeiStructures.LOGGER.info(
                     "结构调试区块批次开始：structure={}，dimension={}，progress={}/{}，batch={}..{}，chunks={}",
                     currentTarget.structureId(),
