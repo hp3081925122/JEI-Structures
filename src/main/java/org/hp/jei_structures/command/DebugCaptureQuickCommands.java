@@ -342,7 +342,7 @@ final class DebugCaptureQuickCommands {
                 snapshot.structureCount(),
                 snapshot.capturedCount(),
                 snapshot.captureTotalCount(),
-                snapshot.phase(),
+                Component.translatable(snapshot.phase()),
                 snapshot.attempt(),
                 snapshot.attemptCount(),
                 snapshot.speedMultiplier(),

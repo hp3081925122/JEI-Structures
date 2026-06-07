@@ -70,7 +70,7 @@ public final class DebugStructureCaptureTargets {
             List<ResourceKey<Level>> candidateLevels = collectCandidateLevels(server, entry, dimensionId, excludedDimensionId, levelComparator);
             if (candidateLevels.isEmpty()) {
                 JeiStructures.LOGGER.warn(
-                        "结构调试采集跳过结构：{}，候选维度为空，generationBiomeDimensions={}，dimensionId={}，excludedDimensionId={}",
+                        "Structure debug capture skipped structure because candidate dimensions are empty: {}, generationBiomeDimensions={}, dimensionId={}, excludedDimensionId={}",
                         structureId,
                         entry.generationBiomeDimensions != null && !entry.generationBiomeDimensions.isEmpty(),
                         dimensionId,
@@ -102,7 +102,7 @@ public final class DebugStructureCaptureTargets {
                         }
                     });
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("扫描数据包报告目录失败：{}", reportsRoot, exception);
+            JeiStructures.LOGGER.warn("Failed to scan datapack report directory: {}", reportsRoot, exception);
         }
         return Set.copyOf(structureIds);
     }

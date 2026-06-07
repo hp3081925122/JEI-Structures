@@ -170,11 +170,11 @@ public final class DebugStructureCaptureManager {
                 DebugStructureCaptureCoordinator.markQuickStopped();
             }
         } catch (Exception exception) {
-            JeiStructures.LOGGER.error("结构调试采集执行失败", exception);
+            JeiStructures.LOGGER.error("Structure debug capture failed while ticking", exception);
             try {
                 activeSession.fail(exception);
             } catch (Exception nested) {
-                JeiStructures.LOGGER.error("结构调试采集收尾失败", nested);
+                JeiStructures.LOGGER.error("Structure debug capture failed while cleaning up", nested);
             } finally {
                 activeSession = null;
                 DebugStructureCaptureCoordinator.markQuickStopped();
@@ -183,20 +183,20 @@ public final class DebugStructureCaptureManager {
     }
 
     private enum Phase {
-        COOLDOWN("结构间冷却"),
-        LOCATE_DIMENSION("按维度定位结构"),
-        PREPARE_CAPTURE("准备采集结构"),
-        LOAD_CHUNKS("加载结构区块"),
-        SCAN_LOOT("扫描战利品"),
-        WAIT_MOBS("等待生物出现"),
-        SCAN_MOBS("采样生物"),
-        CLEAR("清理残余生物"),
-        WRITE("写出结果");
+        COOLDOWN("jei_structures.command.debug_capture.phase.cooldown"),
+        LOCATE_DIMENSION("jei_structures.command.debug_capture.phase.locate_dimension"),
+        PREPARE_CAPTURE("jei_structures.command.debug_capture.phase.prepare_capture"),
+        LOAD_CHUNKS("jei_structures.command.debug_capture.phase.load_chunks"),
+        SCAN_LOOT("jei_structures.command.debug_capture.phase.scan_loot"),
+        WAIT_MOBS("jei_structures.command.debug_capture.phase.wait_mobs"),
+        SCAN_MOBS("jei_structures.command.debug_capture.phase.scan_mobs"),
+        CLEAR("jei_structures.command.debug_capture.phase.clear"),
+        WRITE("jei_structures.command.debug_capture.phase.write");
 
-        private final String displayName;
+        private final String translationKey;
 
-        Phase(String displayName) {
-            this.displayName = displayName;
+        Phase(String translationKey) {
+            this.translationKey = translationKey;
         }
     }
 
@@ -279,7 +279,7 @@ public final class DebugStructureCaptureManager {
                     targets.size(),
                     completedStructureIds.size(),
                     targets.size(),
-                    currentPhase.displayName,
+                    currentPhase.translationKey,
                     1,
                     1,
                     speedMultiplier,
@@ -472,7 +472,7 @@ public final class DebugStructureCaptureManager {
             int startIndex = currentAttempt.loadedChunkCount;
             int endIndex = Math.min(startIndex + JeiStructuresConfig.captureChunkLoadsPerTick(), totalChunks);
             JeiStructures.LOGGER.info(
-                    "结构调试区块批次开始：structure={}，dimension={}，progress={}/{}，batch={}..{}，chunks={}",
+                    "Structure debug chunk batch started: structure={}, dimension={}, progress={}/{}, batch={}..{}, chunks={}",
                     currentTarget.structureId(),
                     level.dimension().location(),
                     startIndex,
@@ -485,7 +485,7 @@ public final class DebugStructureCaptureManager {
                 ChunkPos chunkPos = currentAttempt.placeChunks.get(index);
                 long chunkStart = System.currentTimeMillis();
                 JeiStructures.LOGGER.info(
-                        "结构调试准备加载区块：structure={}，dimension={}，index={}/{}，chunk=({}, {})",
+                        "Structure debug chunk load started: structure={}, dimension={}, index={}/{}, chunk=({}, {})",
                         currentTarget.structureId(),
                         level.dimension().location(),
                         index + 1,
@@ -497,7 +497,7 @@ public final class DebugStructureCaptureManager {
                 long chunkMillis = System.currentTimeMillis() - chunkStart;
                 if (chunkMillis >= CHUNK_LOAD_SLOW_WARN_MILLIS) {
                     JeiStructures.LOGGER.warn(
-                            "结构调试慢区块加载：structure={}，dimension={}，index={}/{}，chunk=({}, {})，耗时={}ms",
+                            "Structure debug slow chunk load: structure={}, dimension={}, index={}/{}, chunk=({}, {}), elapsed={}ms",
                             currentTarget.structureId(),
                             level.dimension().location(),
                             index + 1,
@@ -508,7 +508,7 @@ public final class DebugStructureCaptureManager {
                     );
                 } else {
                     JeiStructures.LOGGER.info(
-                            "结构调试区块加载完成：structure={}，dimension={}，index={}/{}，chunk=({}, {})，耗时={}ms",
+                            "Structure debug chunk load finished: structure={}, dimension={}, index={}/{}, chunk=({}, {}), elapsed={}ms",
                             currentTarget.structureId(),
                             level.dimension().location(),
                             index + 1,
@@ -524,7 +524,7 @@ public final class DebugStructureCaptureManager {
             timingStats.loadChunksMillis += batchMillis;
             if (batchMillis >= CHUNK_LOAD_BATCH_SLOW_WARN_MILLIS) {
                 JeiStructures.LOGGER.warn(
-                        "结构调试慢区块批次：structure={}，dimension={}，progress={}/{}，batch={}..{}，耗时={}ms",
+                        "Structure debug slow chunk batch: structure={}, dimension={}, progress={}/{}, batch={}..{}, elapsed={}ms",
                         currentTarget.structureId(),
                         level.dimension().location(),
                         currentAttempt.loadedChunkCount,
@@ -535,7 +535,7 @@ public final class DebugStructureCaptureManager {
                 );
             } else {
                 JeiStructures.LOGGER.info(
-                        "结构调试区块批次完成：structure={}，dimension={}，progress={}/{}，batch={}..{}，耗时={}ms",
+                        "Structure debug chunk batch finished: structure={}, dimension={}, progress={}/{}, batch={}..{}, elapsed={}ms",
                         currentTarget.structureId(),
                         level.dimension().location(),
                         currentAttempt.loadedChunkCount,
@@ -798,7 +798,7 @@ public final class DebugStructureCaptureManager {
                 DebugLocateRadiusLimiter.end(requestId);
                 markDimensionLocateFailure(target, level.dimension());
                 currentDimensionLocateCompleted++;
-                JeiStructures.LOGGER.warn("结构调试定位提交失败：{} @ {}", target.structureId(), level.dimension().location(), exception);
+                JeiStructures.LOGGER.warn("Structure debug locate submission failed: {} @ {}", target.structureId(), level.dimension().location(), exception);
                 sendDimensionLocateProgress(server);
                 return;
             }
@@ -1068,7 +1068,7 @@ public final class DebugStructureCaptureManager {
 
         private void fail(Exception exception) throws Exception {
             if (currentTarget != null) {
-                recordFailure(currentPhase.displayName, exception.getMessage() != null ? exception.getMessage() : exception.getClass().getSimpleName());
+                recordFailure(currentPhase.name(), exception.getMessage() != null ? exception.getMessage() : exception.getClass().getSimpleName());
             }
             stoppedEarly = true;
             finish();
@@ -1107,7 +1107,7 @@ public final class DebugStructureCaptureManager {
                 }
                 ResourceKey<Level> levelKey = target.primaryLevel();
                 String levelId = levelKey != null ? levelKey.location().toString() : "";
-                recordFailure(target, "定位结构", "所有候选维度均未定位到自然结构", levelKey, levelId, baseOrigin);
+                recordFailure(target, "locate_structure", "no_natural_structure_found_in_candidate_dimensions", levelKey, levelId, baseOrigin);
             }
         }
 
@@ -1133,9 +1133,9 @@ public final class DebugStructureCaptureManager {
                 long elapsed = now - phaseStartMillis;
                 addPhaseElapsed(currentPhase, elapsed);
                 JeiStructures.LOGGER.info(
-                        "结构调试阶段耗时：from={}，to={}，elapsed={}ms，structure={}，dimension={}",
-                        currentPhase.displayName,
-                        phase.displayName,
+                        "Structure debug phase timing: from={}, to={}, elapsed={}ms, structure={}, dimension={}",
+                        currentPhase.name(),
+                        phase.name(),
                         elapsed,
                         currentTarget != null ? currentTarget.structureId() : "-",
                         currentDimensionKey != null ? currentDimensionKey.location() : "-"
@@ -1153,8 +1153,8 @@ public final class DebugStructureCaptureManager {
             long elapsed = now - phaseStartMillis;
             addPhaseElapsed(currentPhase, elapsed);
             JeiStructures.LOGGER.info(
-                    "结构调试阶段耗时刷新：phase={}，elapsed={}ms，structure={}，dimension={}",
-                    currentPhase.displayName,
+                    "Structure debug phase timing refreshed: phase={}, elapsed={}ms, structure={}, dimension={}",
+                    currentPhase.name(),
                     elapsed,
                     currentTarget != null ? currentTarget.structureId() : "-",
                     currentDimensionKey != null ? currentDimensionKey.location() : "-"
@@ -1167,12 +1167,12 @@ public final class DebugStructureCaptureManager {
                 case COOLDOWN -> timingStats.cooldownMillis += elapsed;
                 case LOCATE_DIMENSION -> timingStats.locateMillis += elapsed;
                 case PREPARE_CAPTURE -> timingStats.prepareMillis += elapsed;
-                case LOAD_CHUNKS -> timingStats.loadChunksMillis += 0L;
-                case SCAN_LOOT -> timingStats.lootMillis += 0L;
+                case LOAD_CHUNKS -> timingStats.loadChunksMillis += elapsed;
+                case SCAN_LOOT -> timingStats.lootMillis += elapsed;
                 case WAIT_MOBS -> timingStats.mobWaitMillis += elapsed;
-                case SCAN_MOBS -> timingStats.mobScanMillis += 0L;
-                case CLEAR -> timingStats.clearMillis += 0L;
-                case WRITE -> timingStats.writeMillis += 0L;
+                case SCAN_MOBS -> timingStats.mobScanMillis += elapsed;
+                case CLEAR -> timingStats.clearMillis += elapsed;
+                case WRITE -> timingStats.writeMillis += elapsed;
             }
         }
 
@@ -1195,7 +1195,7 @@ public final class DebugStructureCaptureManager {
                     timingSnapshot.slowLocateStructureCount()
             );
             JeiStructures.LOGGER.info(
-                    "结构调试耗时统计：total={}，cooldown={}，locate={}，prepare={}，chunks={}，loot={}，mobWait={}，mobScan={}，clear={}，write={}，other={}，slowLocate={}",
+                    "Structure debug timing summary: total={}, cooldown={}, locate={}, prepare={}, chunks={}, loot={}, mobWait={}, mobScan={}, clear={}, write={}, other={}, slowLocate={}",
                     timingSnapshot.totalDuration(),
                     timingSnapshot.cooldownDuration(),
                     timingSnapshot.locateDuration(),
@@ -1474,6 +1474,8 @@ public final class DebugStructureCaptureManager {
                     entryJson.addProperty("bonus_rolls_text", entry.bonusRollsText);
                     entryJson.addProperty("chance_text", entry.chanceText);
                     entryJson.addProperty("count_text", entry.countText);
+                    entryJson.add("chance_notes", toLootTextJson(entry.chanceNotes));
+                    entryJson.add("count_notes", toLootTextJson(entry.countNotes));
                     entriesArray.add(entryJson);
                 }
                 detailJson.add("entries", entriesArray);
@@ -1488,6 +1490,27 @@ public final class DebugStructureCaptureManager {
             itemIds.stream().sorted(String.CASE_INSENSITIVE_ORDER).forEach(itemsArray::add);
             json.add("items", itemsArray);
             return json;
+        }
+
+        private JsonArray toLootTextJson(List<StructureIndexCache.LootTextEntry> notes) {
+            JsonArray array = new JsonArray();
+            if (notes == null || notes.isEmpty()) {
+                return array;
+            }
+            for (StructureIndexCache.LootTextEntry note : notes) {
+                if (note == null || note.translationKey == null || note.translationKey.isBlank()) {
+                    continue;
+                }
+                JsonObject json = new JsonObject();
+                json.addProperty("translation_key", note.translationKey);
+                JsonArray args = new JsonArray();
+                if (note.args != null) {
+                    note.args.forEach(args::add);
+                }
+                json.add("args", args);
+                array.add(json);
+            }
+            return array;
         }
     }
 

@@ -10,7 +10,7 @@ import java.util.Map;
 
 public final class StructureIndexCache {
 
-    public static final int CURRENT_VERSION = 8;
+    public static final int CURRENT_VERSION = 9;
     public static final Gson GSON = new GsonBuilder()
             .disableHtmlEscaping()
             .setPrettyPrinting()
@@ -81,5 +81,12 @@ public final class StructureIndexCache {
         public String bonusRollsText = "";
         public String chanceText = "";
         public String countText = "";
+        public List<LootTextEntry> chanceNotes = new ArrayList<>();
+        public List<LootTextEntry> countNotes = new ArrayList<>();
+    }
+
+    public static final class LootTextEntry {
+        public String translationKey = "";
+        public List<String> args = new ArrayList<>();
     }
 }

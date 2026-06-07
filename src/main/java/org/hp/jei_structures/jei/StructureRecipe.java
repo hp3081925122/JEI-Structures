@@ -415,6 +415,25 @@ public final class StructureRecipe {
             copy.bonusRollsText = valueOrEmpty(source.bonusRollsText);
             copy.chanceText = valueOrEmpty(source.chanceText);
             copy.countText = valueOrEmpty(source.countText);
+            copy.chanceNotes = copyLootTextEntries(source.chanceNotes);
+            copy.countNotes = copyLootTextEntries(source.countNotes);
+            copies.add(copy);
+        }
+        return copies;
+    }
+
+    private static List<StructureIndexCache.LootTextEntry> copyLootTextEntries(List<StructureIndexCache.LootTextEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<StructureIndexCache.LootTextEntry> copies = new ArrayList<>(entries.size());
+        for (StructureIndexCache.LootTextEntry source : entries) {
+            if (source == null) {
+                continue;
+            }
+            StructureIndexCache.LootTextEntry copy = new StructureIndexCache.LootTextEntry();
+            copy.translationKey = valueOrEmpty(source.translationKey);
+            copy.args = copyStrings(source.args);
             copies.add(copy);
         }
         return copies;
@@ -715,8 +734,8 @@ public final class StructureRecipe {
         lines.add(Component.translatable("jei_structures.tooltip.loot_quality", entry.quality).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("jei_structures.tooltip.loot_rolls", valueOrUnknown(entry.rollsText)).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("jei_structures.tooltip.loot_bonus_rolls", valueOrUnknown(entry.bonusRollsText)).withStyle(ChatFormatting.GRAY));
-        lines.add(Component.translatable("jei_structures.tooltip.loot_chance", valueOrUnknown(entry.chanceText)).withStyle(ChatFormatting.GRAY));
-        lines.add(Component.translatable("jei_structures.tooltip.loot_count", valueOrUnknown(entry.countText)).withStyle(ChatFormatting.GRAY));
+        lines.add(Component.translatable("jei_structures.tooltip.loot_chance", notesText(entry.chanceNotes, entry.chanceText)).withStyle(ChatFormatting.GRAY));
+        lines.add(Component.translatable("jei_structures.tooltip.loot_count", notesText(entry.countNotes, entry.countText)).withStyle(ChatFormatting.GRAY));
         return List.copyOf(lines);
     }
 
@@ -725,19 +744,66 @@ public final class StructureRecipe {
             return Component.empty();
         }
         String itemName = StructureTextHelper.getItemName(entry.itemId);
-        List<String> parts = new ArrayList<>();
-        parts.add(valueOrUnknown(entry.chanceText));
-        parts.add(valueOrUnknown(entry.countText));
+        List<Component> parts = new ArrayList<>();
+        parts.add(notesComponent(entry.chanceNotes, entry.chanceText));
+        parts.add(notesComponent(entry.countNotes, entry.countText));
         if (entry.quality != 0) {
-            parts.add("质量 " + entry.quality);
+            parts.add(Component.translatable("jei_structures.loot_entry.quality", entry.quality));
         }
         if (entry.rollsText != null && !entry.rollsText.isBlank() && !"1".equals(entry.rollsText)) {
-            parts.add("抽取 " + entry.rollsText);
+            parts.add(Component.translatable("jei_structures.loot_entry.rolls", entry.rollsText));
         }
         if (entry.bonusRollsText != null && !entry.bonusRollsText.isBlank() && !"0".equals(entry.bonusRollsText)) {
-            parts.add("额外抽取 " + entry.bonusRollsText);
+            parts.add(Component.translatable("jei_structures.loot_entry.bonus_rolls", entry.bonusRollsText));
         }
-        return Component.literal(itemName + " | " + String.join(" | ", parts));
+        Component line = Component.literal(itemName);
+        for (Component part : parts) {
+            if (part == null || part.getString().isBlank()) {
+                continue;
+            }
+            line = line.copy().append(Component.literal(" | ")).append(part);
+        }
+        return line;
+    }
+
+    private static Component notesComponent(List<StructureIndexCache.LootTextEntry> notes, String fallbackText) {
+        if (notes == null || notes.isEmpty()) {
+            return Component.literal(valueOrUnknown(fallbackText));
+        }
+        Component result = Component.empty();
+        boolean first = true;
+        for (StructureIndexCache.LootTextEntry note : notes) {
+            Component component = lootNoteComponent(note);
+            if (component.getString().isBlank()) {
+                continue;
+            }
+            if (!first) {
+                result = result.copy().append(Component.translatable("jei_structures.common.separator"));
+            }
+            result = result.copy().append(component);
+            first = false;
+        }
+        return first ? Component.literal(valueOrUnknown(fallbackText)) : result;
+    }
+
+    private static String notesText(List<StructureIndexCache.LootTextEntry> notes, String fallbackText) {
+        Component component = notesComponent(notes, fallbackText);
+        return component.getString();
+    }
+
+    private static Component lootNoteComponent(StructureIndexCache.LootTextEntry note) {
+        if (note == null || note.translationKey == null || note.translationKey.isBlank()) {
+            return Component.empty();
+        }
+        List<String> args = note.args != null ? note.args : List.of();
+        return switch (args.size()) {
+            case 0 -> Component.translatable(note.translationKey);
+            case 1 -> Component.translatable(note.translationKey, args.get(0));
+            case 2 -> Component.translatable(note.translationKey, args.get(0), args.get(1));
+            case 3 -> Component.translatable(note.translationKey, args.get(0), args.get(1), args.get(2));
+            case 4 -> Component.translatable(note.translationKey, args.get(0), args.get(1), args.get(2), args.get(3));
+            default -> Component.translatable(note.translationKey, args.toArray());
+        };
     }
 
     private ItemStack resolveIconStack() {

@@ -66,7 +66,7 @@ public final class DebugStructureCaptureExport {
     }
 
     public static FailureEntryData createFailureEntry(String structureId, String structureType, int attempt, ResourceKey<Level> levelKey, String levelId, BlockPos origin, String phaseName, String reason) {
-        String safeReason = reason != null && !reason.isBlank() ? reason : "未知原因";
+        String safeReason = reason != null && !reason.isBlank() ? reason : "unknown_reason";
         String safeDimension = levelId != null && !levelId.isBlank()
                 ? levelId
                 : levelKey != null ? levelKey.location().toString() : "";

@@ -35,7 +35,7 @@ public final class StructureSpecialInfoLoader {
                     .sorted()
                     .forEach(location -> readResource(resourceManager, location, entity, data));
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("读取特殊信息目录失败：{}", root, exception);
+            JeiStructures.LOGGER.warn("Failed to read special info directory: {}", root, exception);
         }
     }
 
@@ -64,7 +64,7 @@ public final class StructureSpecialInfoLoader {
                 }
             }
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("解析特殊信息文件失败：{}", location, exception);
+            JeiStructures.LOGGER.warn("Failed to parse special info file: {}", location, exception);
         }
     }
 
@@ -74,20 +74,20 @@ public final class StructureSpecialInfoLoader {
         }
         String translationKey = getString(json, "translation_key");
         if (translationKey.isBlank()) {
-            JeiStructures.LOGGER.warn("跳过特殊信息条目，缺少 translation_key：{}", json);
+            JeiStructures.LOGGER.warn("Skipped special info entry because translation_key is missing: {}", json);
             return;
         }
         if (entity) {
             String entityId = getString(json, "entity_id");
             if (entityId.isBlank()) {
-                JeiStructures.LOGGER.warn("跳过特殊实体条目，缺少 entity_id：{}", json);
+                JeiStructures.LOGGER.warn("Skipped special entity info entry because entity_id is missing: {}", json);
                 return;
             }
             data.addEntityTranslation(entityId, translationKey);
         } else {
             String blockId = getString(json, "block_id");
             if (blockId.isBlank()) {
-                JeiStructures.LOGGER.warn("跳过特殊方块条目，缺少 block_id：{}", json);
+                JeiStructures.LOGGER.warn("Skipped special block info entry because block_id is missing: {}", json);
                 return;
             }
             data.addBlockTranslation(blockId, translationKey);

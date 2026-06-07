@@ -52,7 +52,7 @@ public final class LootTableItemResolver {
             return cached;
         }
         if (!resolvingItems.add(key)) {
-            JeiStructures.LOGGER.debug("检测到战利品表递归引用，跳过本轮物品展开：{}", lootTableId);
+            JeiStructures.LOGGER.debug("Recursive loot table reference detected while resolving items: {}", lootTableId);
             return Set.of();
         }
         try {
@@ -83,7 +83,7 @@ public final class LootTableItemResolver {
             return copyDetail(cached);
         }
         if (!resolvingDetails.add(key)) {
-            JeiStructures.LOGGER.debug("检测到战利品表递归引用，跳过本轮明细展开：{}", lootTableId);
+            JeiStructures.LOGGER.debug("Recursive loot table reference detected while resolving details: {}", lootTableId);
             StructureIndexCache.LootTableDetail recursive = new StructureIndexCache.LootTableDetail();
             recursive.lootTableId = key;
             return recursive;
@@ -102,7 +102,7 @@ public final class LootTableItemResolver {
         detail.lootTableId = lootTableId.toString();
         JsonObject json = readJson(toLootTableLocation(lootTableId));
         if (json == null) {
-            JeiStructures.LOGGER.debug("未找到战利品表资源：{}", lootTableId);
+            JeiStructures.LOGGER.debug("Loot table resource was not found: {}", lootTableId);
             return detail;
         }
         JsonArray pools = getArray(json, "pools");
@@ -121,9 +121,9 @@ public final class LootTableItemResolver {
             int totalWeight = estimateTotalWeight(entries);
             String rollsText = describeNumberProvider(pool.get("rolls"), "1");
             String bonusRollsText = describeNumberProvider(pool.get("bonus_rolls"), "0");
-            String poolConditionsText = describeConditions(pool.get("conditions"));
+            List<StructureIndexCache.LootTextEntry> poolConditions = describeConditions(pool.get("conditions"));
             for (JsonElement entryElement : entries) {
-                appendEntries(detail.entries, lootTableId, entryElement, totalWeight, rollsText, bonusRollsText, poolConditionsText, "");
+                appendEntries(detail.entries, lootTableId, entryElement, totalWeight, rollsText, bonusRollsText, poolConditions, List.of());
             }
         }
         detail.entries.sort(Comparator
@@ -132,22 +132,22 @@ public final class LootTableItemResolver {
         return detail;
     }
 
-    private void appendEntries(List<StructureIndexCache.LootItemEntry> output, ResourceLocation rootLootTableId, JsonElement element, int totalWeight, String rollsText, String bonusRollsText, String inheritedConditions, String inheritedCountText) {
+    private void appendEntries(List<StructureIndexCache.LootItemEntry> output, ResourceLocation rootLootTableId, JsonElement element, int totalWeight, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> inheritedChanceNotes, List<StructureIndexCache.LootTextEntry> inheritedCountNotes) {
         if (element == null || !element.isJsonObject()) {
             return;
         }
         JsonObject object = element.getAsJsonObject();
         String type = getString(object, "type");
-        String mergedConditions = mergeSummary(inheritedConditions, describeConditions(object.get("conditions")));
-        String mergedCountText = mergeSummary(inheritedCountText, describeFunctions(object.get("functions")));
+        List<StructureIndexCache.LootTextEntry> mergedChanceNotes = mergeNotes(inheritedChanceNotes, describeConditions(object.get("conditions")));
+        List<StructureIndexCache.LootTextEntry> mergedCountNotes = mergeNotes(inheritedCountNotes, describeFunctions(object.get("functions")));
         int weight = Math.max(getInt(object, "weight", 1), 1);
         int quality = getInt(object, "quality", 0);
-        String chanceText = mergeSummary(buildRelativeWeightText(weight, totalWeight), mergedConditions);
+        List<StructureIndexCache.LootTextEntry> chanceNotes = mergeNotes(List.of(buildRelativeWeightNote(weight, totalWeight)), mergedChanceNotes);
 
         if ("minecraft:item".equals(type)) {
             ResourceLocation itemId = getResourceLocation(object, "name");
             if (itemId != null && ForgeRegistries.ITEMS.containsKey(itemId)) {
-                output.add(createLootItemEntry(itemId.toString(), weight, quality, rollsText, bonusRollsText, chanceText, finalizeCountText(mergedCountText)));
+                output.add(createLootItemEntry(itemId.toString(), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -158,9 +158,9 @@ public final class LootTableItemResolver {
                 return;
             }
             List<String> tagItems = expandTag(tagId);
-            String tagChanceText = mergeSummary(chanceText, "标签展开：" + tagId);
+            List<StructureIndexCache.LootTextEntry> tagChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.tag_expansion", tagId.toString())));
             for (String itemId : tagItems) {
-                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, tagChanceText, finalizeCountText(mergedCountText)));
+                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -170,9 +170,9 @@ public final class LootTableItemResolver {
             if (childLootTable == null) {
                 return;
             }
-            String childChanceText = mergeSummary(chanceText, "引用子表：" + childLootTable);
+            List<StructureIndexCache.LootTextEntry> childChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.nested_loot_table", childLootTable.toString())));
             for (String itemId : resolveLootItems(childLootTable)) {
-                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, childChanceText, finalizeCountText(mergedCountText)));
+                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, childChanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -183,7 +183,7 @@ public final class LootTableItemResolver {
                 return;
             }
             for (JsonElement child : children) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedConditions, mergedCountText);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
             }
             return;
         }
@@ -191,13 +191,13 @@ public final class LootTableItemResolver {
         JsonArray children = getArray(object, "children");
         if (children != null) {
             for (JsonElement child : children) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedConditions, mergedCountText);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
             }
         }
         JsonArray nestedEntries = getArray(object, "entries");
         if (nestedEntries != null) {
             for (JsonElement child : nestedEntries) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedConditions, mergedCountText);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
             }
         }
     }
@@ -233,24 +233,26 @@ public final class LootTableItemResolver {
         return Math.max(getInt(object, "weight", 1), 1);
     }
 
-    private StructureIndexCache.LootItemEntry createLootItemEntry(String itemId, int weight, int quality, String rollsText, String bonusRollsText, String chanceText, String countText) {
+    private StructureIndexCache.LootItemEntry createLootItemEntry(String itemId, int weight, int quality, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> chanceNotes, List<StructureIndexCache.LootTextEntry> countNotes) {
         StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
         entry.itemId = itemId;
         entry.weight = weight;
         entry.quality = quality;
         entry.rollsText = fallbackText(rollsText, "1");
         entry.bonusRollsText = fallbackText(bonusRollsText, "0");
-        entry.chanceText = fallbackText(chanceText, "相对权重未知");
-        entry.countText = fallbackText(countText, "默认数量");
+        entry.chanceNotes = copyNotes(chanceNotes);
+        entry.countNotes = copyNotes(countNotes);
+        entry.chanceText = notesToEnglish(entry.chanceNotes, "Unknown relative weight");
+        entry.countText = notesToEnglish(entry.countNotes, "Default count");
         return entry;
     }
 
-    private String buildRelativeWeightText(int weight, int totalWeight) {
+    private StructureIndexCache.LootTextEntry buildRelativeWeightNote(int weight, int totalWeight) {
         if (weight <= 0 || totalWeight <= 0) {
-            return "相对权重未知";
+            return note("jei_structures.loot_note.relative_weight_unknown");
         }
         double percent = (double) weight * 100.0D / (double) totalWeight;
-        return "相对权重 " + weight + "/" + totalWeight + "（约" + formatDecimal(percent) + "%）";
+        return note("jei_structures.loot_note.relative_weight", String.valueOf(weight), String.valueOf(totalWeight), formatDecimal(percent));
     }
 
     private String describeNumberProvider(JsonElement element, String fallback) {
@@ -272,10 +274,10 @@ public final class LootTableItemResolver {
             return buildRangeText(object.get("min"), object.get("max"));
         }
         if ("minecraft:binomial".equals(type)) {
-            return "n=" + describeNumberProvider(object.get("n"), "?") + "，p=" + describeNumberProvider(object.get("p"), "?");
+            return "n=" + describeNumberProvider(object.get("n"), "?") + ", p=" + describeNumberProvider(object.get("p"), "?");
         }
         if ("minecraft:score".equals(type)) {
-            return "记分板";
+            return "scoreboard";
         }
         if (object.has("min") || object.has("max")) {
             return buildRangeText(object.get("min"), object.get("max"));
@@ -292,11 +294,11 @@ public final class LootTableItemResolver {
         return minText + "~" + maxText;
     }
 
-    private String describeConditions(JsonElement element) {
+    private List<StructureIndexCache.LootTextEntry> describeConditions(JsonElement element) {
         if (element == null || element.isJsonNull() || !element.isJsonArray()) {
-            return "";
+            return List.of();
         }
-        List<String> descriptions = new ArrayList<>();
+        List<StructureIndexCache.LootTextEntry> descriptions = new ArrayList<>();
         for (JsonElement conditionElement : element.getAsJsonArray()) {
             if (conditionElement == null || !conditionElement.isJsonObject()) {
                 continue;
@@ -307,26 +309,23 @@ public final class LootTableItemResolver {
                 continue;
             }
             if ("minecraft:random_chance".equals(type)) {
-                descriptions.add("随机概率 " + describeNumberProvider(condition.get("chance"), "?") + "%");
+                descriptions.add(note("jei_structures.loot_note.condition_random_chance", describeNumberProvider(condition.get("chance"), "?")));
                 continue;
             }
             if ("minecraft:random_chance_with_looting".equals(type)) {
-                descriptions.add("随机概率 " + describeNumberProvider(condition.get("chance"), "?") + "，抢夺加成 " + describeNumberProvider(condition.get("looting_multiplier"), "?"));
+                descriptions.add(note("jei_structures.loot_note.condition_random_chance_with_looting", describeNumberProvider(condition.get("chance"), "?"), describeNumberProvider(condition.get("looting_multiplier"), "?")));
                 continue;
             }
-            descriptions.add(simplifyKey(type));
+            descriptions.add(note("jei_structures.loot_note.condition_type", simplifyKey(type)));
         }
-        if (descriptions.isEmpty()) {
-            return "";
-        }
-        return "条件：" + String.join("、", descriptions);
+        return List.copyOf(descriptions);
     }
 
-    private String describeFunctions(JsonElement element) {
+    private List<StructureIndexCache.LootTextEntry> describeFunctions(JsonElement element) {
         if (element == null || element.isJsonNull() || !element.isJsonArray()) {
-            return "";
+            return List.of();
         }
-        List<String> descriptions = new ArrayList<>();
+        List<StructureIndexCache.LootTextEntry> descriptions = new ArrayList<>();
         for (JsonElement functionElement : element.getAsJsonArray()) {
             if (functionElement == null || !functionElement.isJsonObject()) {
                 continue;
@@ -337,20 +336,23 @@ public final class LootTableItemResolver {
                 continue;
             }
             if ("minecraft:set_count".equals(type)) {
-                descriptions.add("数量 " + describeNumberProvider(function.get("count"), "?"));
+                descriptions.add(note("jei_structures.loot_note.count_set", describeNumberProvider(function.get("count"), "?")));
                 continue;
             }
             if ("minecraft:limit_count".equals(type)) {
-                descriptions.add("限制数量 " + buildRangeText(function.get("min"), function.get("max")));
+                descriptions.add(note("jei_structures.loot_note.count_limit", buildRangeText(function.get("min"), function.get("max"))));
                 continue;
             }
-            descriptions.add("函数：" + simplifyKey(type));
+            descriptions.add(note("jei_structures.loot_note.function_type", simplifyKey(type)));
         }
-        return String.join("；", descriptions);
+        return List.copyOf(descriptions);
     }
 
-    private String finalizeCountText(String countText) {
-        return countText.isBlank() ? "默认数量" : countText;
+    private List<StructureIndexCache.LootTextEntry> finalizeCountNotes(List<StructureIndexCache.LootTextEntry> countNotes) {
+        if (countNotes == null || countNotes.isEmpty()) {
+            return List.of(note("jei_structures.loot_note.count_default"));
+        }
+        return copyNotes(countNotes);
     }
 
     private List<String> expandTag(ResourceLocation tagId) {
@@ -377,7 +379,7 @@ public final class LootTableItemResolver {
                 return json != null && json.isJsonObject() ? json.getAsJsonObject() : null;
             }
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("读取战利品表失败：{}", location, exception);
+            JeiStructures.LOGGER.warn("Failed to read loot table: {}", location, exception);
             return null;
         }
     }
@@ -404,6 +406,8 @@ public final class LootTableItemResolver {
             entry.bonusRollsText = sourceEntry.bonusRollsText != null ? sourceEntry.bonusRollsText : "";
             entry.chanceText = sourceEntry.chanceText != null ? sourceEntry.chanceText : "";
             entry.countText = sourceEntry.countText != null ? sourceEntry.countText : "";
+            entry.chanceNotes = copyNotes(sourceEntry.chanceNotes);
+            entry.countNotes = copyNotes(sourceEntry.countNotes);
             copy.entries.add(entry);
         }
         return copy;
@@ -443,16 +447,81 @@ public final class LootTableItemResolver {
         return text == null || text.isBlank() ? fallback : text;
     }
 
-    private static String mergeSummary(String first, String second) {
-        String left = first == null ? "" : first.trim();
-        String right = second == null ? "" : second.trim();
-        if (left.isBlank()) {
-            return right;
+    private static List<StructureIndexCache.LootTextEntry> mergeNotes(List<StructureIndexCache.LootTextEntry> first, List<StructureIndexCache.LootTextEntry> second) {
+        List<StructureIndexCache.LootTextEntry> result = new ArrayList<>();
+        result.addAll(copyNotes(first));
+        result.addAll(copyNotes(second));
+        return List.copyOf(result);
+    }
+
+    private static List<StructureIndexCache.LootTextEntry> copyNotes(List<StructureIndexCache.LootTextEntry> source) {
+        if (source == null || source.isEmpty()) {
+            return new ArrayList<>();
         }
-        if (right.isBlank()) {
-            return left;
+        List<StructureIndexCache.LootTextEntry> result = new ArrayList<>(source.size());
+        for (StructureIndexCache.LootTextEntry sourceEntry : source) {
+            if (sourceEntry == null || sourceEntry.translationKey == null || sourceEntry.translationKey.isBlank()) {
+                continue;
+            }
+            StructureIndexCache.LootTextEntry entry = new StructureIndexCache.LootTextEntry();
+            entry.translationKey = sourceEntry.translationKey;
+            entry.args = sourceEntry.args != null ? new ArrayList<>(sourceEntry.args) : new ArrayList<>();
+            result.add(entry);
         }
-        return left + "；" + right;
+        return result;
+    }
+
+    private static StructureIndexCache.LootTextEntry note(String translationKey, String... args) {
+        StructureIndexCache.LootTextEntry entry = new StructureIndexCache.LootTextEntry();
+        entry.translationKey = translationKey != null ? translationKey : "";
+        if (args != null) {
+            for (String arg : args) {
+                entry.args.add(arg != null ? arg : "");
+            }
+        }
+        return entry;
+    }
+
+    private static String notesToEnglish(List<StructureIndexCache.LootTextEntry> notes, String fallback) {
+        if (notes == null || notes.isEmpty()) {
+            return fallback;
+        }
+        List<String> parts = new ArrayList<>();
+        for (StructureIndexCache.LootTextEntry note : notes) {
+            String text = noteToEnglish(note);
+            if (!text.isBlank()) {
+                parts.add(text);
+            }
+        }
+        return parts.isEmpty() ? fallback : String.join("; ", parts);
+    }
+
+    private static String noteToEnglish(StructureIndexCache.LootTextEntry note) {
+        if (note == null || note.translationKey == null) {
+            return "";
+        }
+        List<String> args = note.args != null ? note.args : List.of();
+        return switch (note.translationKey) {
+            case "jei_structures.loot_note.relative_weight_unknown" -> "Unknown relative weight";
+            case "jei_structures.loot_note.relative_weight" -> "Relative weight " + arg(args, 0) + "/" + arg(args, 1) + " (~" + arg(args, 2) + "%)";
+            case "jei_structures.loot_note.tag_expansion" -> "Tag expansion: " + arg(args, 0);
+            case "jei_structures.loot_note.nested_loot_table" -> "Nested loot table: " + arg(args, 0);
+            case "jei_structures.loot_note.condition_random_chance" -> "Random chance " + arg(args, 0) + "%";
+            case "jei_structures.loot_note.condition_random_chance_with_looting" -> "Random chance " + arg(args, 0) + ", looting bonus " + arg(args, 1);
+            case "jei_structures.loot_note.condition_type" -> "Condition: " + arg(args, 0);
+            case "jei_structures.loot_note.count_default" -> "Default count";
+            case "jei_structures.loot_note.count_set" -> "Count " + arg(args, 0);
+            case "jei_structures.loot_note.count_limit" -> "Limit count " + arg(args, 0);
+            case "jei_structures.loot_note.function_type" -> "Function: " + arg(args, 0);
+            default -> "";
+        };
+    }
+
+    private static String arg(List<String> args, int index) {
+        if (args == null || index < 0 || index >= args.size()) {
+            return "";
+        }
+        return args.get(index);
     }
 
     private static String simplifyKey(String key) {

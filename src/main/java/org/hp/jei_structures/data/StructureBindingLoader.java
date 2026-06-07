@@ -202,7 +202,7 @@ public final class StructureBindingLoader {
                     .sorted()
                     .forEach(location -> readJsonResource(resourceManager, location, result));
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("读取数据包结构绑定目录失败：{}", root, exception);
+            JeiStructures.LOGGER.warn("Failed to read datapack structure binding directory: {}", root, exception);
         }
         return result;
     }
@@ -215,7 +215,7 @@ public final class StructureBindingLoader {
                     .sorted()
                     .forEach(location -> readJsonResource(resourceManager, location, result));
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("读取数据包报告结构绑定目录失败：reports/{}", dirName, exception);
+            JeiStructures.LOGGER.warn("Failed to read datapack report structure binding directory: reports/{}", dirName, exception);
         }
         return result;
     }
@@ -231,7 +231,7 @@ public final class StructureBindingLoader {
                     .sorted()
                     .forEach(path -> readJsonFile(path, result));
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("读取本地结构绑定目录失败：{}", dir, exception);
+            JeiStructures.LOGGER.warn("Failed to read local structure binding directory: {}", dir, exception);
         }
         return result;
     }
@@ -248,7 +248,7 @@ public final class StructureBindingLoader {
                     .sorted()
                     .forEach(path -> readJsonFile(path, result));
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("读取本地结构报告目录失败：{}/{}", reportsRoot, dirName, exception);
+            JeiStructures.LOGGER.warn("Failed to read local structure report directory: {}/{}", reportsRoot, dirName, exception);
         }
         return result;
     }
@@ -284,7 +284,7 @@ public final class StructureBindingLoader {
                 addJsonElements(JsonParser.parseReader(reader), result);
             }
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("解析数据包结构绑定文件失败：{}", location, exception);
+            JeiStructures.LOGGER.warn("Failed to parse datapack structure binding file: {}", location, exception);
         }
     }
 
@@ -292,7 +292,7 @@ public final class StructureBindingLoader {
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             addJsonElements(JsonParser.parseReader(reader), result);
         } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("解析本地结构绑定文件失败：{}", path, exception);
+            JeiStructures.LOGGER.warn("Failed to parse local structure binding file: {}", path, exception);
         }
     }
 
