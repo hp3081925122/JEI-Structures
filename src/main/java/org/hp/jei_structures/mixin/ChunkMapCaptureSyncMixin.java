@@ -16,7 +16,6 @@ public abstract class ChunkMapCaptureSyncMixin {
         if (!DebugCaptureOptimizationGuard.isSuppressingPlayerSync(player)) {
             return;
         }
-        DebugCaptureOptimizationGuard.recordSuppressedPlayerSync();
         callbackInfo.cancel();
     }
 }

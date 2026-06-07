@@ -1122,7 +1122,6 @@ public final class DebugStructureCaptureManager {
                 DebugLocateRadiusLimiter.end(request.requestId());
             }
             activeLocateRequests.clear();
-            JeiStructures.LOGGER.info("结构调试跳过玩家同步更新次数：{}", DebugCaptureOptimizationGuard.getSuppressedPlayerSyncCount());
             DebugCaptureOptimizationGuard.disable();
             DebugStructureCheckConcurrency.disable();
             cleanedUp = true;
@@ -1246,16 +1245,6 @@ public final class DebugStructureCaptureManager {
                 return teleportPos;
             }
             ServerLevel targetLevel = locatedStructure.level();
-            String structureId = currentTarget != null ? currentTarget.structureId().toString() : currentAttempt.aggregate.structureId;
-            JeiStructures.LOGGER.info(
-                    "结构调试传送到结构：structure={}，from={}，to={}，目标点=({}, {}, {})",
-                    structureId,
-                    player.serverLevel().dimension().location(),
-                    targetLevel.dimension().location(),
-                    teleportPos.getX(),
-                    teleportPos.getY(),
-                    teleportPos.getZ()
-            );
             player.teleportTo(
                     targetLevel,
                     teleportPos.getX() + 0.5D,
