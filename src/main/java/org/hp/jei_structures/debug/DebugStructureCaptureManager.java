@@ -62,8 +62,6 @@ public final class DebugStructureCaptureManager {
     private static final int BASE_MOB_WAIT_TICKS = 20;
     private static final int MAX_CONCURRENT_LOCATE_REQUESTS = 3;
     private static final long LOCATE_REQUEST_TIMEOUT_MILLIS = 20_000L;
-    private static final long CHUNK_LOAD_SLOW_WARN_MILLIS = 500L;
-    private static final long CHUNK_LOAD_BATCH_SLOW_WARN_MILLIS = 1_500L;
 
     private static Session activeSession;
 
@@ -471,80 +469,13 @@ public final class DebugStructureCaptureManager {
             }
             int startIndex = currentAttempt.loadedChunkCount;
             int endIndex = Math.min(startIndex + JeiStructuresConfig.captureChunkLoadsPerTick(), totalChunks);
-            JeiStructures.LOGGER.info(
-                    "Structure debug chunk batch started: structure={}, dimension={}, progress={}/{}, batch={}..{}, chunks={}",
-                    currentTarget.structureId(),
-                    level.dimension().location(),
-                    startIndex,
-                    totalChunks,
-                    startIndex + 1,
-                    endIndex,
-                    describeChunkBatch(startIndex, endIndex)
-            );
             for (int index = startIndex; index < endIndex; index++) {
                 ChunkPos chunkPos = currentAttempt.placeChunks.get(index);
-                long chunkStart = System.currentTimeMillis();
-                JeiStructures.LOGGER.info(
-                        "Structure debug chunk load started: structure={}, dimension={}, index={}/{}, chunk=({}, {})",
-                        currentTarget.structureId(),
-                        level.dimension().location(),
-                        index + 1,
-                        totalChunks,
-                        chunkPos.x,
-                        chunkPos.z
-                );
                 level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.FULL, true);
-                long chunkMillis = System.currentTimeMillis() - chunkStart;
-                if (chunkMillis >= CHUNK_LOAD_SLOW_WARN_MILLIS) {
-                    JeiStructures.LOGGER.warn(
-                            "Structure debug slow chunk load: structure={}, dimension={}, index={}/{}, chunk=({}, {}), elapsed={}ms",
-                            currentTarget.structureId(),
-                            level.dimension().location(),
-                            index + 1,
-                            totalChunks,
-                            chunkPos.x,
-                            chunkPos.z,
-                            chunkMillis
-                    );
-                } else {
-                    JeiStructures.LOGGER.info(
-                            "Structure debug chunk load finished: structure={}, dimension={}, index={}/{}, chunk=({}, {}), elapsed={}ms",
-                            currentTarget.structureId(),
-                            level.dimension().location(),
-                            index + 1,
-                            totalChunks,
-                            chunkPos.x,
-                            chunkPos.z,
-                            chunkMillis
-                    );
-                }
             }
             currentAttempt.loadedChunkCount = endIndex;
             long batchMillis = System.currentTimeMillis() - start;
             timingStats.loadChunksMillis += batchMillis;
-            if (batchMillis >= CHUNK_LOAD_BATCH_SLOW_WARN_MILLIS) {
-                JeiStructures.LOGGER.warn(
-                        "Structure debug slow chunk batch: structure={}, dimension={}, progress={}/{}, batch={}..{}, elapsed={}ms",
-                        currentTarget.structureId(),
-                        level.dimension().location(),
-                        currentAttempt.loadedChunkCount,
-                        totalChunks,
-                        startIndex + 1,
-                        endIndex,
-                        batchMillis
-                );
-            } else {
-                JeiStructures.LOGGER.info(
-                        "Structure debug chunk batch finished: structure={}, dimension={}, progress={}/{}, batch={}..{}, elapsed={}ms",
-                        currentTarget.structureId(),
-                        level.dimension().location(),
-                        currentAttempt.loadedChunkCount,
-                        totalChunks,
-                        startIndex + 1,
-                        endIndex,
-                        batchMillis
-                );
-            }
             if (currentAttempt.loadedChunkCount < totalChunks) {
                 sendPlayerMessage(
                         server,
@@ -580,21 +511,6 @@ public final class DebugStructureCaptureManager {
             );
             enterPhase(Phase.SCAN_LOOT);
             return false;
-        }
-
-        private String describeChunkBatch(int startIndex, int endIndex) {
-            if (currentAttempt == null || currentAttempt.placeChunks == null || currentAttempt.placeChunks.isEmpty()) {
-                return "";
-            }
-            StringBuilder builder = new StringBuilder();
-            for (int index = startIndex; index < endIndex && index < currentAttempt.placeChunks.size(); index++) {
-                if (!builder.isEmpty()) {
-                    builder.append(", ");
-                }
-                ChunkPos chunkPos = currentAttempt.placeChunks.get(index);
-                builder.append('(').append(chunkPos.x).append(", ").append(chunkPos.z).append(')');
-            }
-            return builder.toString();
         }
 
         private boolean tickScanLoot() {
@@ -669,6 +585,21 @@ public final class DebugStructureCaptureManager {
                 timingStats.writeMillis += System.currentTimeMillis() - start;
                 completedStructureIds.add(currentTarget.structureId().toString());
                 currentDimensionCaptureCompleted++;
+                JeiStructures.LOGGER.info(
+                        "Structure debug capture completed: structure={}, dimension={}, collected={}/{}, dimensionProgress={}/{}, chunks={}, lootBlocks={}, lootTables={}, lootItems={}, mobs={}, elapsed={}",
+                        currentTarget.structureId(),
+                        currentAttempt.level.dimension().location(),
+                        completedStructureIds.size(),
+                        targets.size(),
+                        currentDimensionCaptureCompleted,
+                        currentDimensionCaptureTotal,
+                        currentAttempt.loadedChunkCount,
+                        currentAttempt.aggregate.getLootBindingCount(),
+                        currentAttempt.aggregate.getLootTableCount(),
+                        currentAttempt.aggregate.getLootItemCount(),
+                        currentAttempt.aggregate.getMobCount(),
+                        formatDuration(toSeconds(System.currentTimeMillis() - currentStructureStartMillis))
+                );
                 sendPlayerMessage(
                         server,
                         "jei_structures.command.debug_capture.progress.attempt_finish",
@@ -874,6 +805,20 @@ public final class DebugStructureCaptureManager {
             if (!completedStructureIds.contains(structureId) && !failedStructureIds.contains(structureId)) {
                 locatedCaptureQueue.addLast(new PrelocatedTarget(request.target(), locatedStructure));
                 currentDimensionLocateSucceeded++;
+                JeiStructures.LOGGER.info(
+                        "Structure debug located: structure={}, dimension={}, pos=({}, {}, {}), located={}/{}, success={}, active={}, collected={}/{}",
+                        request.target().structureId(),
+                        request.level().dimension().location(),
+                        result.getFirst().getX(),
+                        result.getFirst().getY(),
+                        result.getFirst().getZ(),
+                        currentDimensionLocateCompleted,
+                        currentDimensionTargets.size(),
+                        currentDimensionLocateSucceeded,
+                        activeLocateRequests.size(),
+                        completedStructureIds.size(),
+                        targets.size()
+                );
             }
             submitLocateRequests(request.level().getServer());
             sendDimensionLocateProgress(request.level().getServer());
@@ -1132,14 +1077,6 @@ public final class DebugStructureCaptureManager {
             if (phaseStartMillis > 0L) {
                 long elapsed = now - phaseStartMillis;
                 addPhaseElapsed(currentPhase, elapsed);
-                JeiStructures.LOGGER.info(
-                        "Structure debug phase timing: from={}, to={}, elapsed={}ms, structure={}, dimension={}",
-                        currentPhase.name(),
-                        phase.name(),
-                        elapsed,
-                        currentTarget != null ? currentTarget.structureId() : "-",
-                        currentDimensionKey != null ? currentDimensionKey.location() : "-"
-                );
             }
             currentPhase = phase;
             phaseStartMillis = now;
@@ -1152,13 +1089,6 @@ public final class DebugStructureCaptureManager {
             }
             long elapsed = now - phaseStartMillis;
             addPhaseElapsed(currentPhase, elapsed);
-            JeiStructures.LOGGER.info(
-                    "Structure debug phase timing refreshed: phase={}, elapsed={}ms, structure={}, dimension={}",
-                    currentPhase.name(),
-                    elapsed,
-                    currentTarget != null ? currentTarget.structureId() : "-",
-                    currentDimensionKey != null ? currentDimensionKey.location() : "-"
-            );
             phaseStartMillis = now;
         }
 
