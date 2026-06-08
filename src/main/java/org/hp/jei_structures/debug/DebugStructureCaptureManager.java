@@ -60,6 +60,7 @@ public final class DebugStructureCaptureManager {
     private static final int END_OUTER_ISLAND_OFFSET_X = 1200;
     private static final int BASE_COOLDOWN_TICKS = 5;
     private static final int BASE_MOB_WAIT_TICKS = 20;
+    private static final int PRELOAD_NEXT_STRUCTURE_CHUNKS_PER_TICK = 1;
     private static final int MAX_CONCURRENT_LOCATE_REQUESTS = 3;
     private static final long LOCATE_REQUEST_TIMEOUT_MILLIS = 20_000L;
 
@@ -399,6 +400,7 @@ public final class DebugStructureCaptureManager {
                 currentTarget = target;
                 currentAttempt = new AttemptContext(target.structureId().toString(), target.entry().structureType);
                 currentAttempt.finishLocate(prelocatedTarget.locatedStructure());
+                currentAttempt.loadedChunkCount = prelocatedTarget.preloadedChunkCount();
                 currentAttempt.teleportPos = teleportPlayerToCapturePosition(server, prelocatedTarget.locatedStructure());
                 currentStructureStartMillis = System.currentTimeMillis();
                 sendPlayerMessage(
@@ -455,7 +457,7 @@ public final class DebugStructureCaptureManager {
                         "jei_structures.command.debug_capture.progress.place_loading",
                         DebugStructureCaptureSupport.getStructureDisplayComponent(currentTarget.structureId()),
                         1,
-                        0,
+                        currentAttempt.loadedChunkCount,
                         totalChunks,
                         currentAttempt.pieceCount,
                         currentDimensionKey != null ? currentDimensionKey.location() : "",
@@ -528,18 +530,52 @@ public final class DebugStructureCaptureManager {
                     currentAttempt.aggregate.getLootItemCount(),
                     speedMultiplier
             );
-            currentAttempt.mobWaitTicks = DebugStructureCaptureCommon.scaleWaitTicks(BASE_MOB_WAIT_TICKS, speedMultiplier);
+            currentAttempt.mobWaitTicks = BASE_MOB_WAIT_TICKS;
             enterPhase(Phase.WAIT_MOBS);
             return false;
         }
 
         private boolean tickWaitMobs() {
             if (currentAttempt.mobWaitTicks > 0) {
+                preloadNextQueuedStructureChunks();
                 currentAttempt.mobWaitTicks--;
                 return false;
             }
             enterPhase(Phase.SCAN_MOBS);
             return false;
+        }
+
+        private void preloadNextQueuedStructureChunks() {
+            PrelocatedTarget prelocatedTarget = findNextPreloadTarget();
+            if (prelocatedTarget == null) {
+                return;
+            }
+            LocatedStructure locatedStructure = prelocatedTarget.locatedStructure();
+            List<ChunkPos> chunks = locatedStructure.placeChunks();
+            int totalChunks = chunks.size();
+            if (prelocatedTarget.preloadedChunkCount() >= totalChunks) {
+                return;
+            }
+            int endIndex = Math.min(prelocatedTarget.preloadedChunkCount() + PRELOAD_NEXT_STRUCTURE_CHUNKS_PER_TICK, totalChunks);
+            for (int index = prelocatedTarget.preloadedChunkCount(); index < endIndex; index++) {
+                ChunkPos chunkPos = chunks.get(index);
+                locatedStructure.level().getChunk(chunkPos.x, chunkPos.z, ChunkStatus.FULL, true);
+            }
+            prelocatedTarget.setPreloadedChunkCount(endIndex);
+        }
+
+        private PrelocatedTarget findNextPreloadTarget() {
+            for (PrelocatedTarget prelocatedTarget : locatedCaptureQueue) {
+                if (prelocatedTarget == null || prelocatedTarget.target() == null) {
+                    continue;
+                }
+                String structureId = prelocatedTarget.target().structureId().toString();
+                if (completedStructureIds.contains(structureId) || failedStructureIds.contains(structureId)) {
+                    continue;
+                }
+                return prelocatedTarget;
+            }
+            return null;
         }
 
         private boolean tickScanMobs() {
@@ -1460,7 +1496,31 @@ public final class DebugStructureCaptureManager {
         }
     }
 
-    private record PrelocatedTarget(StructureTarget target, LocatedStructure locatedStructure) {
+    private static final class PrelocatedTarget {
+        private final StructureTarget target;
+        private final LocatedStructure locatedStructure;
+        private int preloadedChunkCount;
+
+        private PrelocatedTarget(StructureTarget target, LocatedStructure locatedStructure) {
+            this.target = target;
+            this.locatedStructure = locatedStructure;
+        }
+
+        private StructureTarget target() {
+            return target;
+        }
+
+        private LocatedStructure locatedStructure() {
+            return locatedStructure;
+        }
+
+        private int preloadedChunkCount() {
+            return preloadedChunkCount;
+        }
+
+        private void setPreloadedChunkCount(int preloadedChunkCount) {
+            this.preloadedChunkCount = preloadedChunkCount;
+        }
     }
 
     private record AsyncLocateRequest(
