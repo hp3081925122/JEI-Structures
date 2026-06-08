@@ -18,13 +18,14 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkStatus;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
@@ -179,6 +180,13 @@ public final class DebugStructureCaptureManager {
                 DebugStructureCaptureCoordinator.markQuickStopped();
             }
         }
+    }
+
+    public static synchronized void recordJoinedEntity(Entity entity, Level level) {
+        if (activeSession == null) {
+            return;
+        }
+        activeSession.recordJoinedEntity(entity, level);
     }
 
     private enum Phase {
@@ -587,7 +595,7 @@ public final class DebugStructureCaptureManager {
                     ),
                     currentAttempt.box,
                     currentAttempt.aggregate.mobIds,
-                    true
+                    false
             );
             timingStats.mobScanMillis += System.currentTimeMillis() - start;
             sendPlayerMessage(
@@ -608,7 +616,6 @@ public final class DebugStructureCaptureManager {
 
         private boolean tickClear() {
             long start = System.currentTimeMillis();
-            clearRemainingMobs();
             timingStats.clearMillis += System.currentTimeMillis() - start;
             enterPhase(Phase.WRITE);
             return false;
@@ -989,20 +996,37 @@ public final class DebugStructureCaptureManager {
             return lootResolver.resolveLootTableDetail(lootId);
         }
 
-        private void clearRemainingMobs() {
-            if (currentAttempt == null || currentAttempt.level == null || currentAttempt.box == null) {
+        private void recordJoinedEntity(Entity entity, Level level) {
+            if (!(entity instanceof LivingEntity livingEntity) || entity instanceof Player) {
                 return;
             }
-            var bounds = new net.minecraft.world.phys.AABB(
-                    currentAttempt.box.minX(),
-                    currentAttempt.box.minY(),
-                    currentAttempt.box.minZ(),
-                    currentAttempt.box.maxX() + 1.0D,
-                    currentAttempt.box.maxY() + 1.0D,
-                    currentAttempt.box.maxZ() + 1.0D
-            );
-            currentAttempt.level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, bounds, entity -> !(entity instanceof Player player && player.getUUID().equals(playerId)))
-                    .forEach(net.minecraft.world.entity.Entity::discard);
+            if (level != currentAttemptLevel()) {
+                return;
+            }
+            if (currentTarget == null || currentAttempt == null || currentAttempt.box == null) {
+                return;
+            }
+            if (!isInsideCurrentBox(entity)) {
+                return;
+            }
+            ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(livingEntity.getType());
+            if (entityId == null) {
+                return;
+            }
+            currentAttempt.aggregate.mobIds.add(entityId.toString());
+        }
+
+        private Level currentAttemptLevel() {
+            return currentAttempt != null ? currentAttempt.level : null;
+        }
+
+        private boolean isInsideCurrentBox(Entity entity) {
+            return entity.getX() >= currentAttempt.box.minX()
+                    && entity.getX() < currentAttempt.box.maxX() + 1.0D
+                    && entity.getY() >= currentAttempt.box.minY()
+                    && entity.getY() < currentAttempt.box.maxY() + 1.0D
+                    && entity.getZ() >= currentAttempt.box.minZ()
+                    && entity.getZ() < currentAttempt.box.maxZ() + 1.0D;
         }
 
         private void writeCurrentStructureFiles() throws Exception {
@@ -1210,45 +1234,37 @@ public final class DebugStructureCaptureManager {
             if (player == null) {
                 return teleportPos;
             }
-            ServerLevel targetLevel = locatedStructure.level();
+            teleportPlayerTo(locatedStructure.level(), teleportPos);
+            return teleportPos;
+        }
+
+        private void teleportPlayerTo(ServerLevel level, BlockPos pos) {
+            if (level == null || pos == null) {
+                return;
+            }
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+            if (player == null) {
+                return;
+            }
             player.teleportTo(
-                    targetLevel,
-                    teleportPos.getX() + 0.5D,
-                    teleportPos.getY(),
-                    teleportPos.getZ() + 0.5D,
+                    level,
+                    pos.getX() + 0.5D,
+                    pos.getY(),
+                    pos.getZ() + 0.5D,
                     player.getYRot(),
                     player.getXRot()
             );
-            return teleportPos;
         }
 
         private BlockPos resolveTeleportPos(LocatedStructure locatedStructure) {
             ServerLevel level = locatedStructure.level();
             BoundingBox box = locatedStructure.box();
             int centerX = (box.minX() + box.maxX()) >> 1;
+            int centerY = (box.minY() + box.maxY()) >> 1;
             int centerZ = (box.minZ() + box.maxZ()) >> 1;
             int minBuildY = level.getMinBuildHeight();
             int maxBuildY = level.getMaxBuildHeight() - 2;
-            int baseY = Math.max(box.maxY() + 2, minBuildY + 1);
-            List<BlockPos> candidates = new ArrayList<>();
-            candidates.add(new BlockPos(centerX, baseY, centerZ));
-            int[] offsets = new int[]{0, 4, -4, 8, -8, 12, -12};
-            for (int offsetX : offsets) {
-                for (int offsetZ : offsets) {
-                    int x = centerX + offsetX;
-                    int z = centerZ + offsetZ;
-                    int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-                    int startY = Math.max(surfaceY + 1, baseY);
-                    candidates.add(new BlockPos(x, Math.min(startY, maxBuildY), z));
-                }
-            }
-            for (BlockPos candidate : candidates) {
-                BlockPos safePos = findSafeStandingPos(level, candidate, minBuildY, maxBuildY);
-                if (safePos != null) {
-                    return safePos;
-                }
-            }
-            return new BlockPos(centerX, Math.min(Math.max(baseY, minBuildY + 1), maxBuildY), centerZ);
+            return new BlockPos(centerX, Math.min(Math.max(centerY, minBuildY + 1), maxBuildY), centerZ);
         }
 
         private BlockPos findSafeStandingPos(ServerLevel level, BlockPos origin, int minBuildY, int maxBuildY) {

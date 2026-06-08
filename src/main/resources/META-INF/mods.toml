@@ -67,3 +67,9 @@ mandatory = false
 versionRange = "[15.20.0,16)"
 ordering = "AFTER"
 side = "CLIENT"
+[[dependencies."${mod_id}"]]
+modId = "asynclocator"
+mandatory = true
+versionRange = "[1.3.0,)"
+ordering = "AFTER"
+side = "BOTH"

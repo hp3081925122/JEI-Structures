@@ -2,6 +2,7 @@ package org.hp.jei_structures;
 
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.hp.jei_structures.command.StructureExportCommands;
@@ -24,5 +25,10 @@ public final class ForgeEvents {
             return;
         }
         DebugStructureCaptureManager.tick(event.getServer());
+    }
+
+    @SubscribeEvent
+    public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
+        DebugStructureCaptureManager.recordJoinedEntity(event.getEntity(), event.getLevel());
     }
 }
