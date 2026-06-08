@@ -92,15 +92,19 @@ After collection is finished, run:
 /jei_structures export
 ```
 
-`export` 会自动合并配置文件、数据包信息和 `reports` 目录中的收集结果，并生成 JEI 实际读取的索引文件：
+`export` 会自动合并配置文件和数据包里的绑定信息，并生成 JEI 实际读取的索引文件：
 
-`export` automatically merges configs, data pack information, and the collected results from the `reports` directory, then generates the index file used by JEI:
+`export` automatically merges configs and data pack binding information, then generates the index file used by JEI:
 
 ```text
 config/jei_structures/structure_index.json
 ```
 
 整合包作者可以把这个文件随整合包一起分发。普通玩家通常只需要这个文件，不需要自己运行 `debug_capture_quick`。
+
+`reports` 目录只是 `debug_capture_quick` 的原始收集结果保存位置，不会被 `export` 直接合并进最终索引。
+
+The `reports` directory is only the storage location for raw `debug_capture_quick` results, and it is not merged directly into the final index by `export`.
 
 Modpack authors can distribute this file with the modpack. Normal players usually only need this file and do not need to run `debug_capture_quick` themselves.
 

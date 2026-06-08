@@ -35,7 +35,6 @@ public final class StructureBindingLoader {
         loadReportStructureLootBindingsDir(resourceManager, "structure_loot_bindings", data);
         loadLootToStructuresDir(resourceManager, "loot_to_structures", data);
         loadConfigBindings(data);
-        loadLocalReports(data);
         return data;
     }
 
@@ -44,11 +43,6 @@ public final class StructureBindingLoader {
         loadMobToStructuresDir(StructureBindingPaths.getMobToStructuresDir(), data);
         loadStructureLootBindingsDir(StructureBindingPaths.getStructureLootBindingsDir(), data);
         loadLootToStructuresDir(StructureBindingPaths.getLootToStructuresDir(), data);
-    }
-
-    private static void loadLocalReports(StructureBindingData data) {
-        loadLocalReportStructureToMobsDir(StructureBindingPaths.getReportsRoot(), data);
-        loadLocalReportStructureLootBindingsDir(StructureBindingPaths.getReportsRoot(), data);
     }
 
     private static void loadStructureToMobsDir(ResourceManager resourceManager, String dirName, StructureBindingData data) {
@@ -97,14 +91,6 @@ public final class StructureBindingLoader {
         }
     }
 
-    private static void loadLocalReportStructureToMobsDir(Path reportsRoot, StructureBindingData data) {
-        for (JsonObject json : readLocalReportJsonObjects(reportsRoot, "structure_to_mobs")) {
-            for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
-                data.addMobBinding(entry.getKey(), readStringArray(entry.getValue()));
-            }
-        }
-    }
-
     private static void loadStructureLootBindingsDir(ResourceManager resourceManager, String dirName, StructureBindingData data) {
         for (JsonObject json : readJsonObjects(resourceManager, dirName)) {
             StructureLootBinding binding = parseStructureLootBinding(json);
@@ -127,16 +113,6 @@ public final class StructureBindingLoader {
 
     private static void loadReportStructureLootBindingsDir(ResourceManager resourceManager, String dirName, StructureBindingData data) {
         for (JsonObject json : readReportJsonObjects(resourceManager, dirName)) {
-            StructureLootBinding binding = parseStructureLootBinding(json);
-            if (binding == null) {
-                continue;
-            }
-            data.addLootBinding(binding.structureId, binding);
-        }
-    }
-
-    private static void loadLocalReportStructureLootBindingsDir(Path reportsRoot, StructureBindingData data) {
-        for (JsonObject json : readLocalReportJsonObjects(reportsRoot, "structure_loot_bindings")) {
             StructureLootBinding binding = parseStructureLootBinding(json);
             if (binding == null) {
                 continue;
@@ -236,42 +212,12 @@ public final class StructureBindingLoader {
         return result;
     }
 
-    private static List<JsonObject> readLocalReportJsonObjects(Path reportsRoot, String dirName) {
-        List<JsonObject> result = new ArrayList<>();
-        if (reportsRoot == null || !Files.isDirectory(reportsRoot)) {
-            return result;
-        }
-        try (var paths = Files.walk(reportsRoot)) {
-            paths.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().endsWith(".json"))
-                    .filter(path -> isLocalReportBindingPath(reportsRoot, path, dirName))
-                    .sorted()
-                    .forEach(path -> readJsonFile(path, result));
-        } catch (Exception exception) {
-            JeiStructures.LOGGER.warn("Failed to read local structure report directory: {}/{}", reportsRoot, dirName, exception);
-        }
-        return result;
-    }
-
     private static boolean isReportBindingPath(ResourceLocation location, String dirName) {
         if (location == null || location.getPath() == null || !location.getPath().endsWith(".json")) {
             return false;
         }
         String[] segments = location.getPath().split("/");
         return segments.length >= 5 && "reports".equals(segments[0]) && dirName.equals(segments[2]);
-    }
-
-    private static boolean isLocalReportBindingPath(Path reportsRoot, Path path, String dirName) {
-        if (reportsRoot == null || path == null || dirName == null || dirName.isBlank()) {
-            return false;
-        }
-        Path relativePath;
-        try {
-            relativePath = reportsRoot.relativize(path);
-        } catch (Exception exception) {
-            return false;
-        }
-        return relativePath.getNameCount() >= 4 && dirName.equals(relativePath.getName(1).toString());
     }
 
     private static void readJsonResource(ResourceManager resourceManager, ResourceLocation location, List<JsonObject> result) {
