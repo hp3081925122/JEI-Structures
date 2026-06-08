@@ -14,6 +14,10 @@
 
 `/jei_structures debug_capture_quick` is an advanced collection command for modpack authors and developers. It actually locates structures, teleports into them, loads their chunks, and captures mobs, container items, loot tables, and special block information.
 
+这个指令会先定位全部目标结构，然后一个一个传送过去采集信息。之所以需要这样做，是因为 Minecraft 原版和很多模组中存在大量硬编码逻辑，例如结构生成时直接生成生物、随机生成方块、或由方块在运行时调用战利品表。仅靠静态导出很难完整识别这些内容。
+
+This command first locates all target structures, then teleports to them one by one to collect information. This is necessary because vanilla Minecraft and many mods contain a lot of hardcoded logic, such as mobs spawned directly during structure generation, randomly generated blocks, or blocks calling loot tables at runtime. Static export alone cannot reliably detect all of this information.
+
 收集全部结构：
 
 Collect all structures:
