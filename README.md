@@ -137,6 +137,84 @@ config/jei_structures/structure_index.json
 
 The `reports` directory is only the storage location for raw `debug_capture_quick` results, and it is not merged directly into the final index by `export`.
 
+## 数据包扩展 / Data Pack Extensions
+
+如果想让某些结构里的方块作为“特殊方块”优先显示，需要把方块加入这个 tag：
+
+If you want some blocks inside structures to be displayed first as special blocks, add them to this tag:
+
+```text
+data/jei_structures/tags/blocks/special_display_blocks.json
+```
+
+示例：
+
+Example:
+
+```json
+{
+  "replace": false,
+  "values": [
+    "minecraft:spawner",
+    "minecraft:chest"
+  ]
+}
+```
+
+导出时，如果结构模板中包含这个 tag 里的方块，它们会进入 JEI 结构页的“特殊方块”区域。
+
+During export, if a structure template contains blocks from this tag, they will be shown in the "Special Blocks" section of the JEI structure page.
+
+如果想给某个生物绑定特殊介绍，可以在数据包中添加：
+
+If you want to bind special information to an entity, add:
+
+```text
+data/<namespace>/structure_special_entities/<file_name>.json
+```
+
+示例：
+
+Example:
+
+```json
+{
+  "entity_id": "minecraft:warden",
+  "translation_key": "jei_structures.special.minecraft.warden"
+}
+```
+
+如果某个结构中包含这个生物，JEI 结构页顶部会显示“特殊信息”，并在对应刷怪蛋 tooltip 中显示这个汉化键的内容。
+
+If a structure contains this entity, the JEI structure page will show "Special Information" at the top, and the translation text will be shown in the tooltip of the corresponding spawn egg.
+
+如果想给某个方块绑定特殊介绍，可以在数据包中添加：
+
+If you want to bind special information to a block, add:
+
+```text
+data/<namespace>/structure_special_blocks/<file_name>.json
+```
+
+示例：
+
+Example:
+
+```json
+{
+  "block_id": "minecraft:spawner",
+  "translation_key": "jei_structures.special.minecraft.spawner"
+}
+```
+
+如果某个结构中包含这个方块，JEI 结构页顶部会显示“特殊信息”，并在对应方块 tooltip 中显示这个汉化键的内容。
+
+If a structure contains this block, the JEI structure page will show "Special Information" at the top, and the translation text will be shown in the tooltip of the corresponding block.
+
+特殊介绍文件支持单个对象，也支持对象数组。
+
+Special information files support either a single object or an array of objects.
+
 Modpack authors can distribute this file with the modpack. Normal players usually only need this file and do not need to run `debug_capture_quick` themselves.
 
 ## 注意事项 / Notes
