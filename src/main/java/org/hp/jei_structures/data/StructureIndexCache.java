@@ -10,7 +10,7 @@ import java.util.Map;
 
 public final class StructureIndexCache {
 
-    public static final int CURRENT_VERSION = 10;
+    public static final int CURRENT_VERSION = 11;
     public static final Gson GSON = new GsonBuilder()
             .disableHtmlEscaping()
             .setPrettyPrinting()
