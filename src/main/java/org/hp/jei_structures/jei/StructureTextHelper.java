@@ -251,13 +251,13 @@ public final class StructureTextHelper {
     private static String getDimensionTranslationKey(ResourceLocation id) {
         if ("minecraft".equals(id.getNamespace())) {
             if ("overworld".equals(id.getPath())) {
-                return "flat_world_preset.minecraft.overworld";
+                return "jei_structures.dimension.minecraft.overworld";
             }
             if ("the_nether".equals(id.getPath()) || "nether".equals(id.getPath())) {
-                return "advancements.story.enter_the_nether.title";
+                return "jei_structures.dimension.minecraft.the_nether";
             }
             if ("the_end".equals(id.getPath()) || "end".equals(id.getPath())) {
-                return "biome.minecraft.the_end";
+                return "jei_structures.dimension.minecraft.the_end";
             }
         }
         return "dimension." + id.getNamespace() + "." + id.getPath().replace('/', '.');

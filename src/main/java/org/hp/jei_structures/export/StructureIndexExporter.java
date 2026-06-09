@@ -134,6 +134,7 @@ public final class StructureIndexExporter {
         entry.generationStep = structureJson != null ? getGenerationStep(structureJson) : getRuntimeGenerationStep(structure);
         entry.generationBiomes = structureJson != null ? collectGenerationBiomes(structureJson) : collectRuntimeGenerationBiomes(structure, biomeRegistry);
         entry.resolvedGenerationBiomes = resolveGenerationBiomes(entry.generationBiomes, biomeRegistry);
+        entry.generationBiomeGroups = collectGenerationBiomeGroups(entry.generationBiomes, biomeRegistry);
         entry.generationBiomeDimensions = collectEntryBiomeDimensions(structureId, entry.resolvedGenerationBiomes, biomeDimensions);
 
         LinkedHashSet<String> templateIds = new LinkedHashSet<>();
@@ -430,6 +431,30 @@ public final class StructureIndexExporter {
                         .comparing(StructureIndexExporter::getBiomeDisplayName, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(String::compareToIgnoreCase))
                 .toList();
+    }
+
+    private static List<StructureIndexCache.GenerationBiomeGroup> collectGenerationBiomeGroups(List<String> selectors, Registry<Biome> biomeRegistry) {
+        if (selectors == null || selectors.isEmpty()) {
+            return List.of();
+        }
+        List<StructureIndexCache.GenerationBiomeGroup> groups = new ArrayList<>();
+        for (String selector : selectors) {
+            if (selector == null || selector.isBlank()) {
+                continue;
+            }
+            LinkedHashSet<String> resolved = new LinkedHashSet<>();
+            collectResolvedBiomeSelector(selector, biomeRegistry, resolved);
+            StructureIndexCache.GenerationBiomeGroup group = new StructureIndexCache.GenerationBiomeGroup();
+            group.selector = selector;
+            group.selectorType = selector.startsWith("#") ? "tag" : "biome";
+            group.resolvedBiomeIds = resolved.stream()
+                    .sorted(Comparator
+                            .comparing(StructureIndexExporter::getBiomeDisplayName, String.CASE_INSENSITIVE_ORDER)
+                            .thenComparing(String::compareToIgnoreCase))
+                    .toList();
+            groups.add(group);
+        }
+        return groups;
     }
 
     private static Map<String, List<String>> collectBiomeDimensions(MinecraftServer server, Registry<Biome> biomeRegistry) {

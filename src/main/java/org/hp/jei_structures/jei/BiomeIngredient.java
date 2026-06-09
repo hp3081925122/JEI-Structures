@@ -78,8 +78,11 @@ public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon
         if (biome != null && !biome.dimensionIds().isEmpty()) {
             tooltip.add(StructureTextHelper.component("jei_structures.tooltip.biome_dimensions", StructureTextHelper.joinDimensionNames(biome.dimensionIds(), 6)));
         }
-        if (id != null && Minecraft.getInstance().options.advancedItemTooltips) {
-            tooltip.add(Component.literal(id.toString()).withStyle(ChatFormatting.DARK_GRAY));
+        if (id != null) {
+            tooltip.add(StructureTextHelper.component("jei_structures.tooltip.biome_id", id.toString()).withStyle(ChatFormatting.DARK_GRAY));
+        }
+        if (biome != null && !biome.sourceSelectors().isEmpty()) {
+            tooltip.add(StructureTextHelper.component("jei_structures.tooltip.biome_source", String.join(", ", biome.sourceSelectors())).withStyle(ChatFormatting.GRAY));
         }
         return tooltip;
     }
