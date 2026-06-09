@@ -2,12 +2,12 @@ package org.hp.jei_structures.jei;
 
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.hp.jei_structures.JeiStructures;
 import org.hp.jei_structures.data.StructureIndexCache;
 
@@ -984,7 +984,7 @@ public final class StructureRecipe {
 
     private static ItemStack toItem(String itemId) {
         ResourceLocation id = ResourceLocation.tryParse(itemId);
-        Item item = id == null ? null : ForgeRegistries.ITEMS.getValue(id);
+        Item item = id == null ? null : BuiltInRegistries.ITEM.get(id);
         if (item == null || item == Items.AIR) {
             return ItemStack.EMPTY;
         }
@@ -993,7 +993,7 @@ public final class StructureRecipe {
 
     private static ItemStack toBlockItem(String blockId) {
         ResourceLocation id = ResourceLocation.tryParse(blockId);
-        var block = id == null ? null : ForgeRegistries.BLOCKS.getValue(id);
+        var block = id == null ? null : BuiltInRegistries.BLOCK.get(id);
         if (block == null) {
             return ItemStack.EMPTY;
         }
@@ -1006,7 +1006,7 @@ public final class StructureRecipe {
 
     private static ItemStack toEntityItem(String entityId) {
         ResourceLocation id = ResourceLocation.tryParse(entityId);
-        var entityType = id == null ? null : ForgeRegistries.ENTITY_TYPES.getValue(id);
+        var entityType = id == null ? null : BuiltInRegistries.ENTITY_TYPE.get(id);
         if (entityType == null) {
             return ItemStack.EMPTY;
         }
@@ -1024,7 +1024,7 @@ public final class StructureRecipe {
         }
         stacks.sort(Comparator
                 .comparing((ItemStack stack) -> stack.getHoverName().getString(), String.CASE_INSENSITIVE_ORDER)
-                .thenComparing(stack -> String.valueOf(ForgeRegistries.ITEMS.getKey(stack.getItem())), String.CASE_INSENSITIVE_ORDER));
+                .thenComparing(stack -> String.valueOf(BuiltInRegistries.ITEM.getKey(stack.getItem())), String.CASE_INSENSITIVE_ORDER));
         return stacks;
     }
 
@@ -1039,15 +1039,14 @@ public final class StructureRecipe {
         }
         stacks.sort(Comparator
                 .comparing((ItemStack stack) -> stack.getHoverName().getString(), String.CASE_INSENSITIVE_ORDER)
-                .thenComparing(stack -> String.valueOf(ForgeRegistries.ITEMS.getKey(stack.getItem())), String.CASE_INSENSITIVE_ORDER));
+                .thenComparing(stack -> String.valueOf(BuiltInRegistries.ITEM.getKey(stack.getItem())), String.CASE_INSENSITIVE_ORDER));
         return stacks;
     }
 
     private static ItemStack findEgg(net.minecraft.world.entity.EntityType<?> entityType) {
-        for (Item item : ForgeRegistries.ITEMS.getValues()) {
-            if (item instanceof net.minecraft.world.item.SpawnEggItem spawnEggItem && spawnEggItem.getType(null) == entityType) {
-                return new ItemStack(item);
-            }
+        net.minecraft.world.item.SpawnEggItem spawnEggItem = net.minecraft.world.item.SpawnEggItem.byId(entityType);
+        if (spawnEggItem != null) {
+            return new ItemStack(spawnEggItem);
         }
         return ItemStack.EMPTY;
     }

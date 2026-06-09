@@ -47,7 +47,7 @@ final class DebugCaptureCommandSupport {
     static int handleDebugCaptureStart(CommandSourceStack source, DebugStructureCaptureTypes.StartResult result) {
         return switch (result.state()) {
             case STARTED -> {
-                source.sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.start", result.structureCount(), result.speedMultiplier(), result.outputRoot()), true);
+                source.sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.start", result.structureCount(), result.speedMultiplier(), result.outputRoot().toString()), true);
                 yield 1;
             }
             case BUSY -> {
@@ -59,7 +59,7 @@ final class DebugCaptureCommandSupport {
                 yield 0;
             }
             case MISSING -> {
-                source.sendFailure(Component.translatable("jei_structures.command.debug_capture.missing", result.missingId()));
+                source.sendFailure(Component.translatable("jei_structures.command.debug_capture.missing", result.missingId() != null ? result.missingId().toString() : ""));
                 yield 0;
             }
         };

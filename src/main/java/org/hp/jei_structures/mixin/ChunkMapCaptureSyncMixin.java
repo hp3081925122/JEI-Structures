@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ChunkMap.class)
 public abstract class ChunkMapCaptureSyncMixin {
 
-    @Inject(method = "move", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "move(Lnet/minecraft/server/level/ServerPlayer;)V", at = @At("HEAD"), cancellable = true, remap = false)
     private void jei_structures$suppressCapturePlayerSync(ServerPlayer player, CallbackInfo callbackInfo) {
         if (!DebugCaptureOptimizationGuard.isSuppressingPlayerSync(player)) {
             return;

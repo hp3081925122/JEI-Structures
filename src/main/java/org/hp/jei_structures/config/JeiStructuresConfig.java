@@ -1,15 +1,15 @@
 package org.hp.jei_structures.config;
 
-import net.minecraftforge.common.ForgeConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 public final class JeiStructuresConfig {
 
-    public static final ForgeConfigSpec COMMON_SPEC;
-    private static final ForgeConfigSpec.BooleanValue SILENT_CAPTURE_TELEPORT;
-    private static final ForgeConfigSpec.IntValue CAPTURE_CHUNK_LOADS_PER_TICK;
+    public static final ModConfigSpec COMMON_SPEC;
+    private static final ModConfigSpec.BooleanValue SILENT_CAPTURE_TELEPORT;
+    private static final ModConfigSpec.IntValue CAPTURE_CHUNK_LOADS_PER_TICK;
 
     static {
-        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
+        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         builder.push("debugCapture");
         SILENT_CAPTURE_TELEPORT = builder
                 .comment("Suppress teleport, chunk, and entity sync packets for the capture player during debug structure capture.")

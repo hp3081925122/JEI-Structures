@@ -1,7 +1,5 @@
 package org.hp.jei_structures.debug;
 
-import brightspark.asynclocator.AsyncLocator;
-import brightspark.asynclocator.AsyncLocatorConfigForge;
 import it.unimi.dsi.fastutil.longs.Long2BooleanMap;
 import it.unimi.dsi.fastutil.longs.Long2BooleanMaps;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
@@ -23,7 +21,6 @@ public final class DebugStructureCheckConcurrency {
     private static final int DEBUG_LOCATOR_THREADS = 3;
     private static final Set<StructureCheckAccess> REGISTERED_CHECKS = Collections.newSetFromMap(new WeakHashMap<>());
     private static boolean enabled;
-    private static Integer previousLocatorThreads;
 
     private DebugStructureCheckConcurrency() {
     }
@@ -38,7 +35,6 @@ public final class DebugStructureCheckConcurrency {
 
     public static synchronized void enable() {
         enabled = true;
-        enableAsyncLocatorThreads();
         for (StructureCheckAccess access : REGISTERED_CHECKS) {
             access.jei_structures$setStructureCheckConcurrency(true);
         }
@@ -49,40 +45,10 @@ public final class DebugStructureCheckConcurrency {
         for (StructureCheckAccess access : REGISTERED_CHECKS) {
             access.jei_structures$setStructureCheckConcurrency(false);
         }
-        restoreAsyncLocatorThreads();
     }
 
     public static int getDebugLocatorThreads(int configuredThreads) {
         return Math.max(Math.max(configuredThreads, 1), DEBUG_LOCATOR_THREADS);
-    }
-
-    private static void enableAsyncLocatorThreads() {
-        try {
-            int configuredThreads = AsyncLocatorConfigForge.LOCATOR_THREADS.get();
-            if (configuredThreads >= DEBUG_LOCATOR_THREADS) {
-                return;
-            }
-            if (previousLocatorThreads == null) {
-                previousLocatorThreads = configuredThreads;
-            }
-            AsyncLocatorConfigForge.LOCATOR_THREADS.set(DEBUG_LOCATOR_THREADS);
-            AsyncLocator.setupExecutorService();
-        } catch (RuntimeException exception) {
-            previousLocatorThreads = null;
-        }
-    }
-
-    private static void restoreAsyncLocatorThreads() {
-        if (previousLocatorThreads == null) {
-            return;
-        }
-        try {
-            AsyncLocatorConfigForge.LOCATOR_THREADS.set(previousLocatorThreads);
-            AsyncLocator.setupExecutorService();
-        } catch (RuntimeException ignored) {
-        } finally {
-            previousLocatorThreads = null;
-        }
     }
 
     public static Long2ObjectMap<Object2IntMap<Structure>> copyLoadedChunks(Long2ObjectMap<Object2IntMap<Structure>> source) {

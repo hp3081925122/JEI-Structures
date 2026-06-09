@@ -362,7 +362,7 @@ final class DebugCaptureQuickCommands {
                 snapshot.dimensionCaptureTotal(),
                 DebugCaptureCommandSupport.formatDuration(snapshot.elapsedSeconds()),
                 DebugCaptureCommandSupport.formatDuration(snapshot.structureElapsedSeconds()),
-                snapshot.outputRoot()
+                snapshot.outputRoot() != null ? snapshot.outputRoot().toString() : ""
         ), false);
         return 1;
     }
@@ -373,7 +373,7 @@ final class DebugCaptureQuickCommands {
             context.getSource().sendFailure(Component.translatable("jei_structures.command.debug_capture.stop.idle"));
             return 0;
         }
-        context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.stop.requested", result.outputRoot()), true);
+        context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.stop.requested", result.outputRoot() != null ? result.outputRoot().toString() : ""), true);
         DebugStructureCaptureTypes.TimingSnapshot timingSnapshot = result.timingSnapshot();
         if (timingSnapshot != null) {
             context.getSource().sendSuccess(() -> Component.translatable(

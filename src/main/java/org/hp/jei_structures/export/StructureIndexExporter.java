@@ -6,11 +6,14 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -28,7 +31,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.world.level.storage.loot.LootTable;
 import org.hp.jei_structures.JeiStructures;
 import org.hp.jei_structures.data.LootTableItemResolver;
 import org.hp.jei_structures.data.StoredItemNbtReader;
@@ -179,22 +182,22 @@ public final class StructureIndexExporter {
         LinkedHashSet<String> entityLootItems = new LinkedHashSet<>();
         LinkedHashSet<String> mobEggItemIds = new LinkedHashSet<>();
         for (String entityId : allMobEntityIds) {
-            EntityType<?> entityType = ForgeRegistries.ENTITY_TYPES.getValue(ResourceLocation.tryParse(entityId));
+            EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.tryParse(entityId));
             if (entityType == null) {
                 continue;
             }
             ItemStack eggStack = findEgg(entityType);
             if (!eggStack.isEmpty()) {
-                ResourceLocation eggId = ForgeRegistries.ITEMS.getKey(eggStack.getItem());
+                ResourceLocation eggId = BuiltInRegistries.ITEM.getKey(eggStack.getItem());
                 if (eggId != null) {
                     mobEggItemIds.add(eggId.toString());
                 }
             }
-            ResourceLocation lootTable = entityType.getDefaultLootTable();
+            ResourceKey<LootTable> lootTable = entityType.getDefaultLootTable();
             if (lootTable == null) {
                 continue;
             }
-            entityLootItems.addAll(lootResolver.resolveLootItems(lootTable));
+            entityLootItems.addAll(lootResolver.resolveLootItems(lootTable.location()));
         }
 
         for (StructureIndexCache.LootBinding binding : entry.containers) {
@@ -645,10 +648,9 @@ public final class StructureIndexExporter {
     }
 
     private static ItemStack findEgg(EntityType<?> entityType) {
-        for (Item item : ForgeRegistries.ITEMS.getValues()) {
-            if (item instanceof SpawnEggItem spawnEggItem && spawnEggItem.getType(null) == entityType) {
-                return new ItemStack(item);
-            }
+        SpawnEggItem spawnEggItem = SpawnEggItem.byId(entityType);
+        if (spawnEggItem != null) {
+            return new ItemStack(spawnEggItem);
         }
         return new ItemStack(Items.AIR);
     }
@@ -768,7 +770,7 @@ public final class StructureIndexExporter {
         }
 
         try (InputStream inputStream = resource.get().open()) {
-            CompoundTag root = NbtIo.readCompressed(inputStream);
+            CompoundTag root = NbtIo.readCompressed(inputStream, NbtAccounter.unlimitedHeap());
             return parseTemplate(templateId, root);
         } catch (Exception exception) {
             JeiStructures.LOGGER.warn("Failed to read structure template: {}", templateId, exception);
@@ -822,7 +824,7 @@ public final class StructureIndexExporter {
         if (blockKey == null) {
             return;
         }
-        Block block = ForgeRegistries.BLOCKS.getValue(blockKey);
+        Block block = BuiltInRegistries.BLOCK.get(blockKey);
         if (block != null && block.defaultBlockState().is(SPECIAL_DISPLAY_BLOCKS_TAG)) {
             result.specialDisplayBlocks.add(blockId);
         }
@@ -1125,7 +1127,7 @@ public final class StructureIndexExporter {
                 if (!(value instanceof EntityType<?> entityType)) {
                     return "";
                 }
-                ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(entityType);
+                ResourceLocation entityId = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
                 return entityId != null ? entityId.toString() : "";
             } catch (Exception exception) {
                 return "";

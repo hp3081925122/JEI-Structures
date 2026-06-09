@@ -1,12 +1,12 @@
 package org.hp.jei_structures.jei;
 
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.hp.jei_structures.data.StructureIndexCache;
 
 import java.util.List;
@@ -177,7 +177,7 @@ public final class StructureTextHelper {
         }
         ResourceLocation id = ResourceLocation.tryParse(entityId);
         if (id != null) {
-            var entityType = ForgeRegistries.ENTITY_TYPES.getValue(id);
+            var entityType = BuiltInRegistries.ENTITY_TYPE.get(id);
             if (entityType != null) {
                 return entityType.getDescription().getString();
             }
@@ -191,7 +191,7 @@ public final class StructureTextHelper {
         }
         ResourceLocation id = ResourceLocation.tryParse(blockId);
         if (id != null) {
-            var block = ForgeRegistries.BLOCKS.getValue(id);
+            var block = BuiltInRegistries.BLOCK.get(id);
             if (block != null) {
                 return block.getName().getString();
             }
@@ -205,7 +205,7 @@ public final class StructureTextHelper {
         }
         ResourceLocation id = ResourceLocation.tryParse(itemId);
         if (id != null) {
-            Item item = ForgeRegistries.ITEMS.getValue(id);
+            Item item = BuiltInRegistries.ITEM.get(id);
             if (item != null) {
                 return item.getDescription().getString();
             }

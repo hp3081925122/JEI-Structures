@@ -28,13 +28,24 @@ public final class StructureExportCommands {
     private static int export(CommandContext<CommandSourceStack> context) {
         try {
             Path path = StructureIndexExporter.export(context.getSource().getServer());
-            context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.export.success", path), true);
+            context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.export.success", path.toString()), true);
             return 1;
         } catch (Exception exception) {
-            String detail = DebugCaptureCommandSupport.buildExceptionDetail(exception);
+            String detail = buildExceptionDetail(exception);
             JeiStructures.LOGGER.error("JEI Structures export failed", exception);
             context.getSource().sendFailure(Component.translatable("jei_structures.command.export.failure", detail));
             return 0;
         }
+    }
+
+    private static String buildExceptionDetail(Exception exception) {
+        if (exception == null) {
+            return "";
+        }
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return exception.getClass().getSimpleName();
+        }
+        return exception.getClass().getSimpleName() + ": " + message;
     }
 }

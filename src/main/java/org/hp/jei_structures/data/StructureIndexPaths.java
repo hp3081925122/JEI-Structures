@@ -1,6 +1,6 @@
 package org.hp.jei_structures.data;
 
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.nio.file.Path;
 
@@ -13,4 +13,3 @@ public final class StructureIndexPaths {
         return FMLPaths.CONFIGDIR.get().resolve("jei_structures").resolve("structure_index.json");
     }
 }
-

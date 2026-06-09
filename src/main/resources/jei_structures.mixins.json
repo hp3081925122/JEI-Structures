@@ -2,14 +2,11 @@
   "required": true,
   "minVersion": "0.8",
   "package": "org.hp.jei_structures.mixin",
-  "compatibilityLevel": "JAVA_8",
+  "compatibilityLevel": "JAVA_21",
   "refmap": "jei_structures.refmap.json",
   "mixins": [
-    "AsyncLocatorConfigDefaultMixin",
     "ChunkMapCaptureSyncMixin",
-    "ChunkGeneratorLocateRadiusMixin",
-    "ServerGamePacketListenerCaptureSyncMixin",
-    "StructureCheckConcurrencyMixin"
+    "ServerGamePacketListenerCaptureSyncMixin"
   ],
   "client": [
   ],

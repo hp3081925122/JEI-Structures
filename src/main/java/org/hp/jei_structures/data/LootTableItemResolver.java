@@ -7,12 +7,12 @@ import com.google.gson.JsonParser;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.hp.jei_structures.JeiStructures;
 
 import java.io.Reader;
@@ -146,7 +146,7 @@ public final class LootTableItemResolver {
 
         if ("minecraft:item".equals(type)) {
             ResourceLocation itemId = getResourceLocation(object, "name");
-            if (itemId != null && ForgeRegistries.ITEMS.containsKey(itemId)) {
+            if (itemId != null && BuiltInRegistries.ITEM.containsKey(itemId)) {
                 output.add(createLootItemEntry(itemId.toString(), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
@@ -548,7 +548,7 @@ public final class LootTableItemResolver {
         if (id == null) {
             return itemId;
         }
-        Item item = ForgeRegistries.ITEMS.getValue(id);
+        Item item = BuiltInRegistries.ITEM.get(id);
         if (item == null) {
             return itemId;
         }

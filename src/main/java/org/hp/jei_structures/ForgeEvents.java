@@ -1,14 +1,14 @@
 package org.hp.jei_structures;
 
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.EntityJoinLevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.hp.jei_structures.command.StructureExportCommands;
 import org.hp.jei_structures.debug.DebugStructureCaptureManager;
 
-@Mod.EventBusSubscriber(modid = JeiStructures.MODID)
+@EventBusSubscriber(modid = JeiStructures.MODID)
 public final class ForgeEvents {
 
     private ForgeEvents() {
@@ -20,10 +20,7 @@ public final class ForgeEvents {
     }
 
     @SubscribeEvent
-    public static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) {
-            return;
-        }
+    public static void onServerTick(ServerTickEvent.Post event) {
         DebugStructureCaptureManager.tick(event.getServer());
     }
 
@@ -31,4 +28,5 @@ public final class ForgeEvents {
     public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
         DebugStructureCaptureManager.recordJoinedEntity(event.getEntity(), event.getLevel());
     }
+
 }
