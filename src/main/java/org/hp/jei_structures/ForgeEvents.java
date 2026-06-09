@@ -7,6 +7,7 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.hp.jei_structures.command.StructureExportCommands;
 import org.hp.jei_structures.debug.DebugStructureCaptureManager;
+import org.hp.jei_structures.tracker.CurrentStructureTracker;
 
 @EventBusSubscriber(modid = JeiStructures.MODID)
 public final class ForgeEvents {
@@ -22,6 +23,7 @@ public final class ForgeEvents {
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         DebugStructureCaptureManager.tick(event.getServer());
+        CurrentStructureTracker.tick(event.getServer());
     }
 
     @SubscribeEvent
