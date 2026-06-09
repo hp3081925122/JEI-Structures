@@ -62,17 +62,43 @@ public final class StructureRecipe {
     private final ItemStack iconStack;
     private final List<ItemStack> lookupInputs;
     private final List<ItemStack> lookupOutputs;
+    private final int pageIndex;
+    private final int pageCount;
 
     public StructureRecipe(StructureIndexCache.StructureEntry entry) {
+        this(entry, null, null, 1, 1);
+    }
+
+    private StructureRecipe(StructureIndexCache.StructureEntry entry, List<ContentBlock> pageBlocks, Map<String, List<Component>> tooltips, int pageIndex, int pageCount) {
         this.entry = copyEntry(entry);
-        this.id = new ResourceLocation(JeiStructures.MODID, sanitize(this.entry.structureId));
+        this.pageIndex = Math.max(pageIndex, 1);
+        this.pageCount = Math.max(pageCount, 1);
+        this.id = new ResourceLocation(JeiStructures.MODID, this.pageCount > 1 ? sanitize(this.entry.structureId) + "_page_" + this.pageIndex : sanitize(this.entry.structureId));
         this.displayName = StructureTextHelper.getStructureComponent(this.entry.structureId);
         LinkedHashMap<String, List<Component>> tooltipMap = new LinkedHashMap<>();
-        this.contentBlocks = List.copyOf(buildContentBlocks(tooltipMap));
-        this.slotTooltips = Map.copyOf(tooltipMap);
+        if (pageBlocks == null) {
+            this.contentBlocks = List.copyOf(buildContentBlocks(tooltipMap));
+            this.slotTooltips = Map.copyOf(tooltipMap);
+        } else {
+            this.contentBlocks = List.copyOf(pageBlocks);
+            this.slotTooltips = tooltips != null ? Map.copyOf(tooltips) : Map.of();
+        }
         this.iconStack = resolveIconStack();
         this.lookupInputs = buildLookupInputs();
         this.lookupOutputs = List.copyOf(lookupInputs);
+    }
+
+    public static List<StructureRecipe> createPages(StructureIndexCache.StructureEntry entry) {
+        StructureRecipe fullRecipe = new StructureRecipe(entry);
+        List<List<ContentBlock>> pages = splitIntoPages(fullRecipe);
+        if (pages.size() <= 1) {
+            return List.of(fullRecipe);
+        }
+        List<StructureRecipe> recipes = new ArrayList<>(pages.size());
+        for (int index = 0; index < pages.size(); index++) {
+            recipes.add(new StructureRecipe(fullRecipe.entry, pages.get(index), fullRecipe.slotTooltips, index + 1, pages.size()));
+        }
+        return List.copyOf(recipes);
     }
 
     public ResourceLocation getId() {
@@ -85,6 +111,14 @@ public final class StructureRecipe {
 
     public Component getDisplayName() {
         return displayName;
+    }
+
+    public int getPageIndex() {
+        return pageIndex;
+    }
+
+    public int getPageCount() {
+        return pageCount;
     }
 
     public ItemStack getIconStack() {
@@ -247,6 +281,74 @@ public final class StructureRecipe {
             height += block.getHeight(this);
         }
         return Math.max(height - contentBlocks.get(contentBlocks.size() - 1).getTrailingSpacing(this), 0);
+    }
+
+    private static List<List<ContentBlock>> splitIntoPages(StructureRecipe recipe) {
+        List<ContentBlock> expandedBlocks = splitOversizedBlocks(recipe);
+        int maxHeight = StructureRecipeCategory.getPageContentHeight();
+        List<List<ContentBlock>> pages = new ArrayList<>();
+        List<ContentBlock> currentPage = new ArrayList<>();
+        int currentHeight = 0;
+        for (ContentBlock block : expandedBlocks) {
+            int blockHeight = block.getHeight(recipe);
+            if (!currentPage.isEmpty() && currentHeight + blockHeight > maxHeight) {
+                pages.add(List.copyOf(currentPage));
+                currentPage.clear();
+                currentHeight = 0;
+            }
+            currentPage.add(block);
+            currentHeight += blockHeight;
+        }
+        if (!currentPage.isEmpty()) {
+            pages.add(List.copyOf(currentPage));
+        }
+        return pages.isEmpty() ? List.of(recipe.contentBlocks) : List.copyOf(pages);
+    }
+
+    private static List<ContentBlock> splitOversizedBlocks(StructureRecipe recipe) {
+        int maxHeight = StructureRecipeCategory.getPageContentHeight();
+        List<ContentBlock> result = new ArrayList<>();
+        for (ContentBlock block : recipe.contentBlocks) {
+            if (block.getHeight(recipe) <= maxHeight || block.slots().isEmpty()) {
+                result.add(block);
+                continue;
+            }
+            List<SlotDisplay> slots = block.slots();
+            int start = 0;
+            boolean first = true;
+            while (start < slots.size()) {
+                int count = findSlotChunkSize(recipe, block, slots, start, maxHeight, first);
+                List<SlotDisplay> chunkSlots = List.copyOf(slots.subList(start, Math.min(start + count, slots.size())));
+                result.add(new ContentBlock(
+                        first ? block.title() : Component.empty(),
+                        block.lines(),
+                        chunkSlots,
+                        block.extraGapAfterLineIndexes(),
+                        block.blockType()
+                ));
+                start += count;
+                first = false;
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static int findSlotChunkSize(StructureRecipe recipe, ContentBlock source, List<SlotDisplay> slots, int start, int maxHeight, boolean firstChunk) {
+        int best = 1;
+        for (int count = 1; start + count <= slots.size(); count++) {
+            ContentBlock candidate = new ContentBlock(
+                    firstChunk ? source.title() : Component.empty(),
+                    source.lines(),
+                    List.copyOf(slots.subList(start, start + count)),
+                    source.extraGapAfterLineIndexes(),
+                    source.blockType()
+            );
+            if (candidate.getHeight(recipe) > maxHeight) {
+                break;
+            }
+            best = count;
+        }
+        return Math.max(best, 1);
     }
 
     private static List<ItemStack> copyStacks(List<ItemStack> stacks) {

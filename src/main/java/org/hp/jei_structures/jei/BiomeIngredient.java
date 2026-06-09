@@ -1,6 +1,7 @@
 package org.hp.jei_structures.jei;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.systems.RenderSystem;
 import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.IIngredientRenderer;
 import mezz.jei.api.ingredients.IIngredientType;
@@ -8,12 +9,8 @@ import mezz.jei.api.ingredients.subtypes.UidContext;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiComponent;
-import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
-import net.minecraft.client.renderer.texture.TextureAtlas;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.TooltipFlag;
 import org.jetbrains.annotations.Nullable;
 import org.hp.jei_structures.JeiStructures;
@@ -23,7 +20,7 @@ import java.util.List;
 public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon>, IIngredientHelper<StructureBiomeIcon>, IIngredientRenderer<StructureBiomeIcon> {
 
     public static final BiomeIngredient INSTANCE = new BiomeIngredient();
-    private static final ResourceLocation MISSING_SPRITE_ID = new ResourceLocation(JeiStructures.MODID, "biome_icon/missing");
+    private static final ResourceLocation MISSING_TEXTURE = new ResourceLocation(JeiStructures.MODID, "textures/biome_icon/missing.png");
 
     private BiomeIngredient() {
     }
@@ -66,20 +63,10 @@ public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon
 
     @Override
     public void render(PoseStack pose, StructureBiomeIcon biome) {
-        TextureAtlasSprite sprite;
         pose.pushPose();
         pose.translate(0.0F, 0.0F, 150.0F);
-        TextureAtlas atlas = Minecraft.getInstance().getModelManager().getAtlas(InventoryMenu.BLOCK_ATLAS);
-        ResourceLocation id = getResourceLocation(biome);
-        if (id == null) {
-            sprite = atlas.getSprite(MISSING_SPRITE_ID);
-        } else {
-            sprite = atlas.getSprite(new ResourceLocation(id.getNamespace(), "biome_icon/" + id.getPath()));
-            if (MissingTextureAtlasSprite.getLocation().equals(sprite.getName())) {
-                sprite = atlas.getSprite(MISSING_SPRITE_ID);
-            }
-        }
-        GuiComponent.blit(pose, 0, 0, 0, 16, 16, sprite);
+        RenderSystem.setShaderTexture(0, getTexture(biome));
+        GuiComponent.blit(pose, 0, 0, 0, 0, 16, 16, 16, 16);
         pose.popPose();
     }
 
@@ -103,5 +90,17 @@ public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon
             return Component.literal("unknown");
         }
         return StructureTextHelper.getBiomeComponent(id.toString());
+    }
+
+    private static ResourceLocation getTexture(StructureBiomeIcon biome) {
+        ResourceLocation id = INSTANCE.getResourceLocation(biome);
+        if (id == null) {
+            return MISSING_TEXTURE;
+        }
+        ResourceLocation texture = new ResourceLocation(id.getNamespace(), "textures/biome_icon/" + id.getPath() + ".png");
+        if (Minecraft.getInstance().getResourceManager().getResource(texture).isPresent()) {
+            return texture;
+        }
+        return MISSING_TEXTURE;
     }
 }

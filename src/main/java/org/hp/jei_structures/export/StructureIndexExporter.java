@@ -121,15 +121,18 @@ public final class StructureIndexExporter {
 
     private static StructureIndexCache.StructureEntry exportStructure(ResourceLocation structureId, Structure structure, ResourceManager resourceManager, LootTableItemResolver lootResolver, Registry<Biome> biomeRegistry, Map<String, List<String>> biomeDimensions, StructureBindingData bindingData, StructureSpecialInfoData specialInfoData) {
         JsonObject structureJson = readJson(resourceManager, toStructureJsonLocation(structureId));
-        if (structureJson == null) {
+        if (structureJson == null && structure == null) {
             return null;
+        }
+        if (structureJson == null) {
+            JeiStructures.LOGGER.debug("Structure {} has no datapack JSON definition; exporting runtime fallback entry.", structureId);
         }
 
         StructureIndexCache.StructureEntry entry = new StructureIndexCache.StructureEntry();
         entry.structureId = structureId.toString();
-        entry.structureType = getString(structureJson, "type");
-        entry.generationStep = getGenerationStep(structureJson);
-        entry.generationBiomes = collectGenerationBiomes(structureJson);
+        entry.structureType = structureJson != null ? getString(structureJson, "type") : getRuntimeStructureType(structure);
+        entry.generationStep = structureJson != null ? getGenerationStep(structureJson) : getRuntimeGenerationStep(structure);
+        entry.generationBiomes = structureJson != null ? collectGenerationBiomes(structureJson) : collectRuntimeGenerationBiomes(structure, biomeRegistry);
         entry.resolvedGenerationBiomes = resolveGenerationBiomes(entry.generationBiomes, biomeRegistry);
         entry.generationBiomeDimensions = collectEntryBiomeDimensions(structureId, entry.resolvedGenerationBiomes, biomeDimensions);
 
@@ -138,12 +141,19 @@ public final class StructureIndexExporter {
         LinkedHashSet<String> templateEntities = new LinkedHashSet<>();
         LinkedHashSet<String> allMobEntityIds = new LinkedHashSet<>();
 
-        collectStructureSpawns(structureJson, spawnOverrideEntities);
+        if (structureJson != null) {
+            collectStructureSpawns(structureJson, spawnOverrideEntities);
+        } else {
+            collectRuntimeStructureSpawns(structure, spawnOverrideEntities);
+        }
         allMobEntityIds.addAll(spawnOverrideEntities);
 
-        ResourceLocation startPool = getResourceLocation(structureJson, "start_pool");
-        if (startPool != null) {
-            collectTemplatesFromPool(resourceManager, startPool, templateIds, new LinkedHashSet<>());
+        ResourceLocation startPool = null;
+        if (structureJson != null) {
+            startPool = getResourceLocation(structureJson, "start_pool");
+            if (startPool != null) {
+                collectTemplatesFromPool(resourceManager, startPool, templateIds, new LinkedHashSet<>());
+            }
         }
         JeiStructures.LOGGER.debug("Structure {} start pool: {}, template count: {}", structureId, startPool, templateIds.size());
 
@@ -331,6 +341,60 @@ public final class StructureIndexExporter {
             return null;
         }
         return lootResolver.resolveLootTableDetail(ResourceLocation.tryParse(lootTableId));
+    }
+
+    private static String getRuntimeStructureType(Structure structure) {
+        if (structure == null || structure.type() == null) {
+            return "";
+        }
+        ResourceLocation typeId = Registry.STRUCTURE_TYPES.getKey(structure.type());
+        return typeId != null ? typeId.toString() : structure.type().getClass().getName();
+    }
+
+    private static String getRuntimeGenerationStep(Structure structure) {
+        if (structure == null || structure.step() == null) {
+            return "";
+        }
+        return structure.step().getSerializedName();
+    }
+
+    private static List<String> collectRuntimeGenerationBiomes(Structure structure, Registry<Biome> biomeRegistry) {
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        if (structure == null || biomeRegistry == null) {
+            return List.of();
+        }
+        try {
+            for (var holder : structure.biomes()) {
+                ResourceLocation biomeId = biomeRegistry.getKey(holder.value());
+                if (biomeId != null) {
+                    result.add(biomeId.toString());
+                }
+            }
+        } catch (Exception exception) {
+            JeiStructures.LOGGER.debug("Failed to collect runtime structure biomes: {}", structure.getClass().getName(), exception);
+        }
+        return new ArrayList<>(result);
+    }
+
+    private static void collectRuntimeStructureSpawns(Structure structure, Set<String> result) {
+        if (structure == null || result == null) {
+            return;
+        }
+        try {
+            for (var override : structure.spawnOverrides().values()) {
+                if (override == null || override.spawns() == null) {
+                    continue;
+                }
+                for (var spawn : override.spawns().unwrap()) {
+                    ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(spawn.type);
+                    if (entityId != null) {
+                        result.add(entityId.toString());
+                    }
+                }
+            }
+        } catch (Exception exception) {
+            JeiStructures.LOGGER.debug("Failed to collect runtime structure spawn overrides: {}", structure.getClass().getName(), exception);
+        }
     }
 
     private static String getGenerationStep(JsonObject structureJson) {
