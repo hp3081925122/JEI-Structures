@@ -7,6 +7,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.hp.jei_structures.command.StructureExportCommands;
 import org.hp.jei_structures.debug.DebugStructureCaptureManager;
+import org.hp.jei_structures.tracker.CurrentStructureTracker;
 
 @Mod.EventBusSubscriber(modid = JeiStructures.MODID)
 public final class ForgeEvents {
@@ -25,6 +26,7 @@ public final class ForgeEvents {
             return;
         }
         DebugStructureCaptureManager.tick(event.getServer());
+        CurrentStructureTracker.tick(event.getServer());
     }
 
     @SubscribeEvent
