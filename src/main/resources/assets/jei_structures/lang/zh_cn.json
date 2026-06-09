@@ -1,5 +1,10 @@
 {
   "jei_structures.category.structure_index": "结构索引",
+  "jei_structures.toast.current_structure": "当前结构名字：%s",
+  "jei_structures.toast.open_jei_hint": "按 %s 打开对应 JEI 界面",
+  "jei_structures.toast.jei_unavailable": "JEI 当前不可用，无法打开结构页面",
+  "key.jei_structures.open_current_structure": "打开当前结构 JEI 页面",
+  "key.categories.jei_structures": "JEI Structures",
   "jei_structures.category.structure_page": "%s（%s/%s）",
   "jei_structures.jei.lookup_hint": "JEI 仍会用于物品查找结构",
   "jei_structures.command.export.success": "JEI Structures 结构索引已导出到：%s",

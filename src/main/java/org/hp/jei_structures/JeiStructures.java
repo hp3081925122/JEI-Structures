@@ -6,6 +6,7 @@ import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.common.Mod;
 import org.hp.jei_structures.config.JeiStructuresConfig;
+import org.hp.jei_structures.network.JeiStructuresNetwork;
 import org.slf4j.Logger;
 
 @Mod(JeiStructures.MODID)
@@ -16,6 +17,7 @@ public final class JeiStructures {
 
     public JeiStructures() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, JeiStructuresConfig.COMMON_SPEC);
+        JeiStructuresNetwork.register();
         MinecraftForge.EVENT_BUS.register(ForgeEvents.class);
     }
 }

@@ -4,6 +4,7 @@ import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.recipe.IFocus;
 import mezz.jei.api.ingredients.ITypedIngredient;
+import mezz.jei.api.runtime.IJeiRuntime;
 import mezz.jei.api.recipe.advanced.IRecipeManagerPlugin;
 import mezz.jei.api.registration.IAdvancedRegistration;
 import mezz.jei.api.registration.IModIngredientRegistration;
@@ -30,6 +31,8 @@ import java.util.Set;
 public final class JeiStructuresPlugin implements IModPlugin {
 
     private static volatile CachedRecipes cachedRecipes;
+    private static volatile IJeiRuntime runtime;
+    private static volatile StructureRecipeCategory category;
     private final ResourceLocation pluginId = new ResourceLocation(JeiStructures.MODID, "plugin");
 
     @Override
@@ -45,7 +48,9 @@ public final class JeiStructuresPlugin implements IModPlugin {
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
-        registration.addRecipeCategories(new StructureRecipeCategory(registration.getJeiHelpers().getGuiHelper()));
+        StructureRecipeCategory structureCategory = new StructureRecipeCategory(registration.getJeiHelpers().getGuiHelper());
+        category = structureCategory;
+        registration.addRecipeCategories(structureCategory);
     }
 
     @Override
@@ -63,7 +68,33 @@ public final class JeiStructuresPlugin implements IModPlugin {
         registration.addRecipeManagerPlugin(new StructureRecipeLookupPlugin());
     }
 
-    private static List<StructureRecipe> getSharedRecipes() {
+    @Override
+    public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
+        runtime = jeiRuntime;
+    }
+
+    @Override
+    public void onRuntimeUnavailable() {
+        runtime = null;
+    }
+
+    public static boolean openStructureRecipe(String structureId) {
+        IJeiRuntime currentRuntime = runtime;
+        StructureRecipeCategory currentCategory = category;
+        if (currentRuntime == null || currentCategory == null || structureId == null || structureId.isBlank()) {
+            return false;
+        }
+        List<StructureRecipe> matchedRecipes = getSharedRecipes().stream()
+                .filter(recipe -> structureId.equals(recipe.getEntry().structureId))
+                .toList();
+        if (matchedRecipes.isEmpty()) {
+            return false;
+        }
+        currentRuntime.getRecipesGui().showRecipes(currentCategory, matchedRecipes, List.of());
+        return true;
+    }
+
+    public static List<StructureRecipe> getSharedRecipes() {
         StructureIndexCache cache = StructureIndexCacheLoader.load();
         CachedRecipes snapshot = cachedRecipes;
         if (snapshot != null && snapshot.sourceCache == cache) {

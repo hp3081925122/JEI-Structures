@@ -1,5 +1,10 @@
 {
   "jei_structures.category.structure_index": "Structure Index",
+  "jei_structures.toast.current_structure": "Current Structure: %s",
+  "jei_structures.toast.open_jei_hint": "Press %s to open the JEI page",
+  "jei_structures.toast.jei_unavailable": "JEI is not available, unable to open the structure page",
+  "key.jei_structures.open_current_structure": "Open Current Structure JEI Page",
+  "key.categories.jei_structures": "JEI Structures",
   "jei_structures.category.structure_page": "%s (%s/%s)",
   "jei_structures.jei.lookup_hint": "JEI is still used for item lookups",
   "jei_structures.command.export.success": "JEI Structures index exported to: %s",
