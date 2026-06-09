@@ -61,11 +61,6 @@ neoForge {
 
 sourceSets {
     main {
-        java {
-            exclude 'org/hp/jei_structures/mixin/AsyncLocatorConfigDefaultMixin.java'
-            exclude 'org/hp/jei_structures/mixin/ChunkGeneratorLocateRadiusMixin.java'
-            exclude 'org/hp/jei_structures/mixin/StructureCheckConcurrencyMixin.java'
-        }
         resources {
             srcDir 'src/generated/resources'
         }

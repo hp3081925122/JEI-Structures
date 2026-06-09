@@ -31,12 +31,12 @@ import java.util.Map;
 public abstract class StructureCheckConcurrencyMixin implements DebugStructureCheckConcurrency.StructureCheckAccess {
 
     @Mutable
-    @Shadow
+    @Shadow(remap = false)
     @Final
     private Long2ObjectMap<Object2IntMap<Structure>> loadedChunks;
 
     @Mutable
-    @Shadow
+    @Shadow(remap = false)
     @Final
     private Map<Structure, Long2BooleanMap> featureChecks;
 
@@ -49,7 +49,7 @@ public abstract class StructureCheckConcurrencyMixin implements DebugStructureCh
     @Unique
     private boolean jei_structures$concurrencyEnabled;
 
-    @Inject(method = "<init>", at = @At("RETURN"))
+    @Inject(method = "<init>", at = @At("RETURN"), remap = false)
     private void jei_structures$registerStructureCheck(
             ChunkScanAccess storageAccess,
             RegistryAccess registryAccess,

@@ -18,7 +18,6 @@ import java.util.WeakHashMap;
 
 public final class DebugStructureCheckConcurrency {
 
-    private static final int DEBUG_LOCATOR_THREADS = 3;
     private static final Set<StructureCheckAccess> REGISTERED_CHECKS = Collections.newSetFromMap(new WeakHashMap<>());
     private static boolean enabled;
 
@@ -45,10 +44,6 @@ public final class DebugStructureCheckConcurrency {
         for (StructureCheckAccess access : REGISTERED_CHECKS) {
             access.jei_structures$setStructureCheckConcurrency(false);
         }
-    }
-
-    public static int getDebugLocatorThreads(int configuredThreads) {
-        return Math.max(Math.max(configuredThreads, 1), DEBUG_LOCATOR_THREADS);
     }
 
     public static Long2ObjectMap<Object2IntMap<Structure>> copyLoadedChunks(Long2ObjectMap<Object2IntMap<Structure>> source) {
