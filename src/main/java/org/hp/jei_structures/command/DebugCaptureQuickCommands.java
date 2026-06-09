@@ -329,13 +329,13 @@ final class DebugCaptureQuickCommands {
     private static int debugCaptureStatus(CommandContext<CommandSourceStack> context) {
         DebugStructureCaptureTypes.StatusSnapshot snapshot = DebugStructureCaptureManager.getStatus();
         if (!snapshot.active()) {
-            context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.status.idle"), false);
+            context.getSource().sendSuccess(Component.translatable("jei_structures.command.debug_capture.status.idle"), false);
             return 1;
         }
         String key = snapshot.stopRequested()
                 ? "jei_structures.command.debug_capture.status.active_stopping"
                 : "jei_structures.command.debug_capture.status.active";
-        context.getSource().sendSuccess(() -> Component.translatable(
+        context.getSource().sendSuccess(Component.translatable(
                 key,
                 DebugStructureCaptureSupport.getStructureDisplayComponent(snapshot.structureId()),
                 snapshot.structureIndex(),
@@ -373,10 +373,10 @@ final class DebugCaptureQuickCommands {
             context.getSource().sendFailure(Component.translatable("jei_structures.command.debug_capture.stop.idle"));
             return 0;
         }
-        context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.stop.requested", result.outputRoot()), true);
+        context.getSource().sendSuccess(Component.translatable("jei_structures.command.debug_capture.stop.requested", result.outputRoot()), true);
         DebugStructureCaptureTypes.TimingSnapshot timingSnapshot = result.timingSnapshot();
         if (timingSnapshot != null) {
-            context.getSource().sendSuccess(() -> Component.translatable(
+            context.getSource().sendSuccess(Component.translatable(
                     "jei_structures.command.debug_capture.finished_timing",
                     timingSnapshot.totalDuration(),
                     timingSnapshot.cooldownDuration(),

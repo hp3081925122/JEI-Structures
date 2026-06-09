@@ -1,14 +1,13 @@
 package org.hp.jei_structures.jei;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.IIngredientRenderer;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.subtypes.UidContext;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiComponent;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -24,7 +23,7 @@ import java.util.List;
 public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon>, IIngredientHelper<StructureBiomeIcon>, IIngredientRenderer<StructureBiomeIcon> {
 
     public static final BiomeIngredient INSTANCE = new BiomeIngredient();
-    private static final ResourceLocation MISSING_SPRITE_ID = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, "biome_icon/missing");
+    private static final ResourceLocation MISSING_SPRITE_ID = new ResourceLocation(JeiStructures.MODID, "biome_icon/missing");
 
     private BiomeIngredient() {
     }
@@ -66,9 +65,8 @@ public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, StructureBiomeIcon biome) {
+    public void render(PoseStack pose, StructureBiomeIcon biome) {
         TextureAtlasSprite sprite;
-        PoseStack pose = guiGraphics.pose();
         pose.pushPose();
         pose.translate(0.0F, 0.0F, 150.0F);
         TextureAtlas atlas = Minecraft.getInstance().getModelManager().getAtlas(InventoryMenu.BLOCK_ATLAS);
@@ -76,23 +74,18 @@ public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon
         if (id == null) {
             sprite = atlas.getSprite(MISSING_SPRITE_ID);
         } else {
-            sprite = atlas.getSprite(ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "biome_icon/" + id.getPath()));
-            if (MissingTextureAtlasSprite.getLocation().equals(sprite.contents().name())) {
+            sprite = atlas.getSprite(new ResourceLocation(id.getNamespace(), "biome_icon/" + id.getPath()));
+            if (MissingTextureAtlasSprite.getLocation().equals(sprite.getName())) {
                 sprite = atlas.getSprite(MISSING_SPRITE_ID);
             }
         }
-        guiGraphics.blit(0, 0, 0, 16, 16, sprite);
+        GuiComponent.blit(pose, 0, 0, 0, 16, 16, sprite);
         pose.popPose();
     }
 
     @Override
-    @Deprecated(forRemoval = true)
     public List<Component> getTooltip(StructureBiomeIcon biome, TooltipFlag tooltipFlag) {
-        return List.of();
-    }
-
-    @Override
-    public void getTooltip(ITooltipBuilder tooltip, StructureBiomeIcon biome, TooltipFlag tooltipFlag) {
+        java.util.ArrayList<Component> tooltip = new java.util.ArrayList<>();
         tooltip.add(getBiomeComponent(biome));
         ResourceLocation id = getResourceLocation(biome);
         if (biome != null && !biome.dimensionIds().isEmpty()) {
@@ -101,6 +94,7 @@ public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon
         if (id != null && Minecraft.getInstance().options.advancedItemTooltips) {
             tooltip.add(Component.literal(id.toString()).withStyle(ChatFormatting.DARK_GRAY));
         }
+        return tooltip;
     }
 
     private static Component getBiomeComponent(StructureBiomeIcon biome) {

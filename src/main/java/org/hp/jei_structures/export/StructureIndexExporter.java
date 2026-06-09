@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
@@ -68,7 +67,7 @@ import java.util.Set;
 public final class StructureIndexExporter {
 
     private static final Set<String> SUSPICIOUS_BLOCKS = Set.of("minecraft:suspicious_sand", "minecraft:suspicious_gravel");
-    private static final TagKey<Block> SPECIAL_DISPLAY_BLOCKS_TAG = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, "special_display_blocks"));
+    private static final TagKey<Block> SPECIAL_DISPLAY_BLOCKS_TAG = TagKey.create(Registry.BLOCK_REGISTRY, new ResourceLocation(JeiStructures.MODID, "special_display_blocks"));
 
     private StructureIndexExporter() {
     }
@@ -76,9 +75,9 @@ public final class StructureIndexExporter {
     public static Path export(MinecraftServer server) throws Exception {
         ResourceManager resourceManager = server.getResourceManager();
         RegistryAccess registryAccess = server.registryAccess();
-        Registry<Item> itemRegistry = server.registryAccess().registryOrThrow(Registries.ITEM);
-        Registry<Biome> biomeRegistry = registryAccess.registryOrThrow(Registries.BIOME);
-        Registry<net.minecraft.world.level.levelgen.structure.Structure> structureRegistry = server.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Registry<Item> itemRegistry = server.registryAccess().registryOrThrow(Registry.ITEM_REGISTRY);
+        Registry<Biome> biomeRegistry = registryAccess.registryOrThrow(Registry.BIOME_REGISTRY);
+        Registry<net.minecraft.world.level.levelgen.structure.Structure> structureRegistry = server.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
         Map<String, List<String>> biomeDimensions = collectBiomeDimensions(server, biomeRegistry);
         StructureBindingData bindingData = StructureBindingLoader.loadAll(resourceManager);
         StructureSpecialInfoData specialInfoData = StructureSpecialInfoLoader.loadAll(resourceManager);
@@ -394,8 +393,8 @@ public final class StructureIndexExporter {
             if (biome == null) {
                 continue;
             }
-            var holder = biomeRegistry.wrapAsHolder(biome);
-            if (holder.is(BiomeTags.IS_OVERWORLD)) {
+            var holder = biomeRegistry.getHolder(entry.getKey());
+            if (holder.isPresent() && holder.get().is(BiomeTags.IS_OVERWORLD)) {
                 dimensionIds.add(Level.OVERWORLD.location().toString());
             }
         }
@@ -430,7 +429,7 @@ public final class StructureIndexExporter {
             if (tagId == null) {
                 return;
             }
-            TagKey<Biome> tagKey = TagKey.create(Registries.BIOME, tagId);
+            TagKey<Biome> tagKey = TagKey.create(Registry.BIOME_REGISTRY, tagId);
             Optional<HolderSet.Named<Biome>> tag = biomeRegistry.getTag(tagKey);
             if (tag.isEmpty()) {
                 return;
@@ -786,15 +785,15 @@ public final class StructureIndexExporter {
     }
 
     private static ResourceLocation toStructureJsonLocation(ResourceLocation id) {
-        return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "worldgen/structure/" + id.getPath() + ".json");
+        return new ResourceLocation(id.getNamespace(), "worldgen/structure/" + id.getPath() + ".json");
     }
 
     private static ResourceLocation toPoolJsonLocation(ResourceLocation id) {
-        return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "worldgen/template_pool/" + id.getPath() + ".json");
+        return new ResourceLocation(id.getNamespace(), "worldgen/template_pool/" + id.getPath() + ".json");
     }
 
     private static ResourceLocation toTemplateLocation(ResourceLocation id) {
-        return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "structures/" + id.getPath() + ".nbt");
+        return new ResourceLocation(id.getNamespace(), "structures/" + id.getPath() + ".nbt");
     }
 
     private static String getString(JsonObject object, String key) {

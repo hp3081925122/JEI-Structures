@@ -28,7 +28,7 @@ public final class StructureExportCommands {
     private static int export(CommandContext<CommandSourceStack> context) {
         try {
             Path path = StructureIndexExporter.export(context.getSource().getServer());
-            context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.export.success", path), true);
+            context.getSource().sendSuccess(Component.translatable("jei_structures.command.export.success", path), true);
             return 1;
         } catch (Exception exception) {
             String detail = DebugCaptureCommandSupport.buildExceptionDetail(exception);

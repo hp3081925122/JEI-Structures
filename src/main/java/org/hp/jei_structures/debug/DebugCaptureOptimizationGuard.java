@@ -5,7 +5,6 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
-import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
@@ -65,7 +64,6 @@ public final class DebugCaptureOptimizationGuard {
                 || packet instanceof ClientboundSetEntityMotionPacket
                 || packet instanceof ClientboundBlockUpdatePacket
                 || packet instanceof ClientboundSectionBlocksUpdatePacket
-                || packet instanceof ClientboundBlockEntityDataPacket
-                || packet instanceof ClientboundBundlePacket;
+                || packet instanceof ClientboundBlockEntityDataPacket;
     }
 }

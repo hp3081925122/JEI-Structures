@@ -171,7 +171,7 @@ public final class StructureBindingLoader {
 
     private static List<JsonObject> readJsonObjects(ResourceManager resourceManager, String dirName) {
         List<JsonObject> result = new ArrayList<>();
-        ResourceLocation root = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, BINDINGS_ROOT + "/" + dirName);
+        ResourceLocation root = new ResourceLocation(JeiStructures.MODID, BINDINGS_ROOT + "/" + dirName);
         try {
             Map<ResourceLocation, Resource> resources = resourceManager.listResources(BINDINGS_ROOT + "/" + dirName, path -> path.getPath().endsWith(".json"));
             resources.keySet().stream()

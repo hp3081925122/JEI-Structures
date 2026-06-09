@@ -1,7 +1,6 @@
 package org.hp.jei_structures.debug;
 
 import net.minecraft.core.Registry;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -36,7 +35,7 @@ public final class DebugStructureCaptureTargets {
         if (cache.structures == null || cache.structures.isEmpty()) {
             return List.of();
         }
-        Registry<Structure> structureRegistry = server.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Registry<Structure> structureRegistry = server.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
         List<ResourceKey<Level>> orderedLevels = collectOrderedLevels(server);
         Comparator<ResourceKey<Level>> levelComparator = createLevelComparator(orderedLevels);
         List<StructureTarget> targets = new ArrayList<>();
@@ -143,7 +142,7 @@ public final class DebugStructureCaptureTargets {
                 for (String candidateDimensionId : dimensionIds) {
                     ResourceLocation location = ResourceLocation.tryParse(candidateDimensionId);
                     if (location != null) {
-                        ResourceKey<Level> levelKey = ResourceKey.create(Registries.DIMENSION, location);
+                        ResourceKey<Level> levelKey = ResourceKey.create(Registry.DIMENSION_REGISTRY, location);
                         if (server.getLevel(levelKey) != null) {
                             candidateLevels.add(levelKey);
                         }
@@ -152,11 +151,11 @@ public final class DebugStructureCaptureTargets {
             }
         }
         if (dimensionId != null) {
-            ResourceKey<Level> requiredLevelKey = ResourceKey.create(Registries.DIMENSION, dimensionId);
+            ResourceKey<Level> requiredLevelKey = ResourceKey.create(Registry.DIMENSION_REGISTRY, dimensionId);
             candidateLevels.removeIf(levelKey -> !requiredLevelKey.equals(levelKey));
         }
         if (excludedDimensionId != null) {
-            ResourceKey<Level> excludedLevelKey = ResourceKey.create(Registries.DIMENSION, excludedDimensionId);
+            ResourceKey<Level> excludedLevelKey = ResourceKey.create(Registry.DIMENSION_REGISTRY, excludedDimensionId);
             candidateLevels.removeIf(excludedLevelKey::equals);
         }
         List<ResourceKey<Level>> sortedLevels = new ArrayList<>(candidateLevels);

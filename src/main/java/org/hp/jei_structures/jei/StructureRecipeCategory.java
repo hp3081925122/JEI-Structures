@@ -1,11 +1,9 @@
 package org.hp.jei_structures.jei;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
-import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
-import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
-import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
@@ -13,7 +11,7 @@ import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiComponent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -43,10 +41,14 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     private static final int HEADER_CONTENT_GAP = 6;
     private static final int CARD_CONTENT_INSET_X = 11;
 
+    private final IDrawable background;
     private final IDrawable icon;
+    private final IDrawable slotBackground;
 
     public StructureRecipeCategory(IGuiHelper guiHelper) {
+        this.background = guiHelper.createBlankDrawable(WIDTH, HEIGHT);
         this.icon = guiHelper.createDrawableItemStack(createStructureBlockStack());
+        this.slotBackground = guiHelper.getSlotDrawable();
     }
 
     public static ItemStack createStructureBlockStack() {
@@ -69,6 +71,11 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     @Override
+    public IDrawable getBackground() {
+        return background;
+    }
+
+    @Override
     public int getWidth() {
         return WIDTH;
     }
@@ -80,16 +87,16 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
+        List<SlotPlacement> placements = getSlotPlacements(recipe);
+        int placementIndex = 0;
         for (StructureRecipe.ContentBlock block : recipe.getContentBlocks()) {
             for (StructureRecipe.SlotDisplay slot : block.slots()) {
-                var slotBuilder = builder.addSlot(slot.role(), getCardContentInsetX(), 0)
-                        .setStandardSlotBackground()
+                SlotPlacement placement = placementIndex < placements.size() ? placements.get(placementIndex) : new SlotPlacement(getCardContentInsetX(), CONTENT_PADDING_Y);
+                placementIndex++;
+                var slotBuilder = builder.addSlot(slot.role(), CONTENT_X + placement.x(), CONTENT_Y + placement.y())
+                        .setBackground(slotBackground, -1, -1)
                         .setSlotName(slot.slotName())
-                        .addRichTooltipCallback((IRecipeSlotView recipeSlotView, ITooltipBuilder tooltip) -> {
-                            for (Component line : recipe.getSlotTooltips(slot.slotName())) {
-                                tooltip.add(line);
-                            }
-                        });
+                        .addTooltipCallback((recipeSlotView, tooltip) -> tooltip.addAll(recipe.getSlotTooltips(slot.slotName())));
                 if (slot.kind() == StructureRecipe.SlotKind.ITEM) {
                     slotBuilder.addItemStack(slot.itemStack());
                 } else if (slot.kind() == StructureRecipe.SlotKind.BIOME && slot.biome() != null) {
@@ -110,27 +117,20 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     @Override
-    public void draw(StructureRecipe recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
-        drawPanel(guiGraphics, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT);
-        drawFixedHeader(recipe, guiGraphics, CONTENT_X, CONTENT_Y);
+    public void draw(StructureRecipe recipe, IRecipeSlotsView recipeSlotsView, PoseStack poseStack, double mouseX, double mouseY) {
+        drawPanel(poseStack, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT);
+        drawFixedHeader(recipe, poseStack, CONTENT_X, CONTENT_Y);
+        drawScrollableContents(recipe, poseStack, CONTENT_X, CONTENT_Y);
     }
 
-    @Override
-    public void createRecipeExtras(mezz.jei.api.gui.widgets.IRecipeExtrasBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
-        List<IRecipeSlotDrawable> contentSlots = builder.getRecipeSlots().getSlots();
-        StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT, contentSlots);
-        builder.addSlottedWidget(widget, contentSlots);
-        builder.addInputHandler(widget);
-    }
-
-    static void drawScrollableContents(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
+    static void drawScrollableContents(StructureRecipe recipe, PoseStack poseStack, int x, int y) {
         Font font = Minecraft.getInstance().font;
         int currentY = y + CONTENT_PADDING_Y;
         int mergedCardX = x + getCardLeftInset();
         int mergedCardY = currentY;
         int mergedCardWidth = getCardWidth();
         int mergedCardHeight = recipe.getMergedContentHeight();
-        drawInnerCard(guiGraphics, mergedCardX, mergedCardY, mergedCardWidth, mergedCardHeight);
+        drawInnerCard(poseStack, mergedCardX, mergedCardY, mergedCardWidth, mergedCardHeight);
 
         List<StructureRecipe.ContentBlock> blocks = recipe.getContentBlocks();
         currentY = mergedCardY;
@@ -142,21 +142,21 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
                 int titleColor = getTitleColor(block);
                 int titleLineY = blockY;
                 for (Component titleLine : block.getWrappedTitle(recipe)) {
-                    guiGraphics.drawString(font, titleLine, x + getCardContentInsetX(), titleLineY, resolveTextColor(titleLine, titleColor), false);
+                    GuiComponent.drawString(poseStack, font, titleLine, x + getCardContentInsetX(), titleLineY, resolveTextColor(titleLine, titleColor));
                     titleLineY += recipe.getTextLineHeight();
                 }
                 int titleLineStartX = x + getCardContentInsetX();
                 int titleLineEndX = x + getContentRightEdge() - getCardContentInsetX();
                 int lineColor = getTitleDividerColor(block);
                 int dividerY = currentY + block.getTitleDividerY(recipe);
-                guiGraphics.fill(titleLineStartX, dividerY, titleLineEndX, dividerY + 1, lineColor);
+                GuiComponent.fill(poseStack, titleLineStartX, dividerY, titleLineEndX, dividerY + 1, lineColor);
             }
             blockY = currentY + block.getTextStartY(recipe);
             int groupIndex = 0;
             for (List<Component> wrappedGroup : block.getWrappedLineGroups(recipe)) {
                 for (Component wrappedLine : wrappedGroup) {
                     int textColor = getTextColor(block, groupIndex);
-                    guiGraphics.drawString(font, wrappedLine, x + getCardContentInsetX(), blockY, resolveTextColor(wrappedLine, textColor), false);
+                    GuiComponent.drawString(poseStack, font, wrappedLine, x + getCardContentInsetX(), blockY, resolveTextColor(wrappedLine, textColor));
                     blockY += recipe.getTextLineHeight();
                 }
                 blockY += block.getExtraLineGapAfter(groupIndex);
@@ -219,12 +219,12 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         return CARD_MARGIN;
     }
 
-    static void drawPanel(GuiGraphics guiGraphics, int x, int y, int width, int height) {
-        guiGraphics.fill(x, y, x + width, y + height, 0xFFE3E3E3);
-        guiGraphics.fill(x, y, x + width, y + 1, 0xFFF8F8F8);
-        guiGraphics.fill(x, y, x + 1, y + height, 0xFFF8F8F8);
-        guiGraphics.fill(x + width - 1, y, x + width, y + height, 0xFF8A8A8A);
-        guiGraphics.fill(x, y + height - 1, x + width, y + height, 0xFF8A8A8A);
+    static void drawPanel(PoseStack poseStack, int x, int y, int width, int height) {
+        GuiComponent.fill(poseStack, x, y, x + width, y + height, 0xFFE3E3E3);
+        GuiComponent.fill(poseStack, x, y, x + width, y + 1, 0xFFF8F8F8);
+        GuiComponent.fill(poseStack, x, y, x + 1, y + height, 0xFFF8F8F8);
+        GuiComponent.fill(poseStack, x + width - 1, y, x + width, y + height, 0xFF8A8A8A);
+        GuiComponent.fill(poseStack, x, y + height - 1, x + width, y + height, 0xFF8A8A8A);
     }
 
     private static int getTitleColor(StructureRecipe.ContentBlock block) {
@@ -257,25 +257,26 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         };
     }
 
-    private static void drawInnerCard(GuiGraphics guiGraphics, int x, int y, int width, int height) {
-        guiGraphics.fill(x, y, x + width, y + height, 0xFFFBFBFB);
-        guiGraphics.fill(x, y, x + width, y + 1, 0xFFFFFFFF);
-        guiGraphics.fill(x, y, x + 1, y + height, 0xFFFFFFFF);
-        guiGraphics.fill(x + width - 1, y, x + width, y + height, 0xFFD5D5D5);
-        guiGraphics.fill(x, y + height - 1, x + width, y + height, 0xFFD5D5D5);
+    private static void drawInnerCard(PoseStack poseStack, int x, int y, int width, int height) {
+        GuiComponent.fill(poseStack, x, y, x + width, y + height, 0xFFFBFBFB);
+        GuiComponent.fill(poseStack, x, y, x + width, y + 1, 0xFFFFFFFF);
+        GuiComponent.fill(poseStack, x, y, x + 1, y + height, 0xFFFFFFFF);
+        GuiComponent.fill(poseStack, x + width - 1, y, x + width, y + height, 0xFFD5D5D5);
+        GuiComponent.fill(poseStack, x, y + height - 1, x + width, y + height, 0xFFD5D5D5);
     }
 
-    private static void drawCenteredString(GuiGraphics guiGraphics, Font font, Component text, int centerX, int y, int color) {
+    private static void drawCenteredString(PoseStack poseStack, Font font, Component text, int centerX, int y, int color) {
         int width = font.width(text);
-        guiGraphics.drawString(font, text, centerX - width / 2, y + TITLE_CENTER_Y - font.lineHeight / 2, resolveTextColor(text, color), false);
+        GuiComponent.drawString(poseStack, font, text, centerX - width / 2, y + TITLE_CENTER_Y - font.lineHeight / 2, resolveTextColor(text, color));
     }
 
-    private static void drawFixedHeader(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
+    private static void drawFixedHeader(StructureRecipe recipe, PoseStack poseStack, int x, int y) {
         Font font = Minecraft.getInstance().font;
         int titleY = y - FIXED_TITLE_Y;
-        drawCenteredString(guiGraphics, font, recipe.getDisplayName(), x + getContentRightEdge() / 2, titleY, 0xFF2A2A2A);
+        drawCenteredString(poseStack, font, recipe.getDisplayName(), x + getContentRightEdge() / 2, titleY, 0xFF2A2A2A);
         int dividerY = y - 1;
-        guiGraphics.fill(
+        GuiComponent.fill(
+                poseStack,
                 x + getCardContentInsetX() + HEADER_DIVIDER_INSET,
                 dividerY,
                 x + getContentRightEdge() - getCardContentInsetX() - HEADER_DIVIDER_INSET,

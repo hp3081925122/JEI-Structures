@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -357,7 +356,7 @@ public final class LootTableItemResolver {
 
     private List<String> expandTag(ResourceLocation tagId) {
         LinkedHashSet<String> itemIds = new LinkedHashSet<>();
-        for (Holder<Item> holder : itemRegistry.getTagOrEmpty(TagKey.create(Registries.ITEM, tagId))) {
+            for (Holder<Item> holder : itemRegistry.getTagOrEmpty(TagKey.create(Registry.ITEM_REGISTRY, tagId))) {
             ResourceLocation itemId = itemRegistry.getKey(holder.value());
             if (itemId != null) {
                 itemIds.add(itemId.toString());
@@ -385,7 +384,7 @@ public final class LootTableItemResolver {
     }
 
     private ResourceLocation toLootTableLocation(ResourceLocation lootTableId) {
-        return ResourceLocation.fromNamespaceAndPath(lootTableId.getNamespace(), "loot_tables/" + lootTableId.getPath() + ".json");
+        return new ResourceLocation(lootTableId.getNamespace(), "loot_tables/" + lootTableId.getPath() + ".json");
     }
 
     private static StructureIndexCache.LootTableDetail copyDetail(StructureIndexCache.LootTableDetail source) {

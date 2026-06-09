@@ -18,7 +18,7 @@ public final class DebugStructureCaptureSupport {
                     : Component.literal(structureId);
         }
         String translationKey = "structure." + id.getNamespace() + "." + id.getPath().replace('/', '.');
-        return Component.translatableWithFallback(translationKey, id.toString());
+        return Component.translatable(translationKey);
     }
 
     public static Component getStructureDisplayComponent(ResourceLocation structureId) {

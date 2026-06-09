@@ -65,7 +65,7 @@ public final class StructureRecipe {
 
     public StructureRecipe(StructureIndexCache.StructureEntry entry) {
         this.entry = copyEntry(entry);
-        this.id = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, sanitize(this.entry.structureId));
+        this.id = new ResourceLocation(JeiStructures.MODID, sanitize(this.entry.structureId));
         this.displayName = StructureTextHelper.getStructureComponent(this.entry.structureId);
         LinkedHashMap<String, List<Component>> tooltipMap = new LinkedHashMap<>();
         this.contentBlocks = List.copyOf(buildContentBlocks(tooltipMap));

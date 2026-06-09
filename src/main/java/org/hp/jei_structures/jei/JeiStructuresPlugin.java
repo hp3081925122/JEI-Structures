@@ -2,8 +2,9 @@ package org.hp.jei_structures.jei;
 
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
+import mezz.jei.api.recipe.IFocus;
 import mezz.jei.api.ingredients.ITypedIngredient;
-import mezz.jei.api.recipe.advanced.ISimpleRecipeManagerPlugin;
+import mezz.jei.api.recipe.advanced.IRecipeManagerPlugin;
 import mezz.jei.api.registration.IAdvancedRegistration;
 import mezz.jei.api.registration.IModIngredientRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
@@ -29,7 +30,7 @@ import java.util.Set;
 public final class JeiStructuresPlugin implements IModPlugin {
 
     private static volatile CachedRecipes cachedRecipes;
-    private final ResourceLocation pluginId = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, "plugin");
+    private final ResourceLocation pluginId = new ResourceLocation(JeiStructures.MODID, "plugin");
 
     @Override
     public ResourceLocation getPluginUid() {
@@ -59,7 +60,7 @@ public final class JeiStructuresPlugin implements IModPlugin {
 
     @Override
     public void registerAdvanced(IAdvancedRegistration registration) {
-        registration.addTypedRecipeManagerPlugin(StructureRecipeCategory.TYPE, new StructureRecipeLookupPlugin());
+        registration.addRecipeManagerPlugin(new StructureRecipeLookupPlugin());
     }
 
     private static List<StructureRecipe> getSharedRecipes() {
@@ -111,7 +112,7 @@ public final class JeiStructuresPlugin implements IModPlugin {
     private record CachedRecipes(StructureIndexCache sourceCache, List<StructureRecipe> recipes) {
     }
 
-    private static final class StructureRecipeLookupPlugin implements ISimpleRecipeManagerPlugin<StructureRecipe> {
+    private static final class StructureRecipeLookupPlugin implements IRecipeManagerPlugin {
 
         private volatile CachedLookup cachedLookup;
 
@@ -119,30 +120,34 @@ public final class JeiStructuresPlugin implements IModPlugin {
         }
 
         @Override
-        public boolean isHandledInput(ITypedIngredient<?> ingredient) {
-            return getMatchedRecipes(ingredient) != null;
+        public <V> List<mezz.jei.api.recipe.RecipeType<?>> getRecipeTypes(IFocus<V> focus) {
+            return getMatchedRecipes(focus.getTypedValue()).isEmpty() ? List.of() : List.of(StructureRecipeCategory.TYPE);
         }
 
         @Override
-        public boolean isHandledOutput(ITypedIngredient<?> ingredient) {
-            return getMatchedRecipes(ingredient) != null;
+        public <T, V> List<T> getRecipes(mezz.jei.api.recipe.category.IRecipeCategory<T> category, IFocus<V> focus) {
+            if (category.getRecipeType() != StructureRecipeCategory.TYPE) {
+                return List.of();
+            }
+            List<StructureRecipe> recipes = getMatchedRecipes(focus.getTypedValue());
+            List<T> result = new ArrayList<>(recipes.size());
+            for (StructureRecipe recipe : recipes) {
+                result.add(category.getRecipeType().getRecipeClass().cast(recipe));
+            }
+            return result;
         }
 
         @Override
-        public List<StructureRecipe> getRecipesForInput(ITypedIngredient<?> ingredient) {
-            List<StructureRecipe> recipes = getMatchedRecipes(ingredient);
-            return recipes != null ? recipes : List.of();
-        }
-
-        @Override
-        public List<StructureRecipe> getRecipesForOutput(ITypedIngredient<?> ingredient) {
-            List<StructureRecipe> recipes = getMatchedRecipes(ingredient);
-            return recipes != null ? recipes : List.of();
-        }
-
-        @Override
-        public List<StructureRecipe> getAllRecipes() {
-            return getLookup().recipes;
+        public <T> List<T> getRecipes(mezz.jei.api.recipe.category.IRecipeCategory<T> category) {
+            if (category.getRecipeType() != StructureRecipeCategory.TYPE) {
+                return List.of();
+            }
+            List<StructureRecipe> recipes = getLookup().recipes;
+            List<T> result = new ArrayList<>(recipes.size());
+            for (StructureRecipe recipe : recipes) {
+                result.add(category.getRecipeType().getRecipeClass().cast(recipe));
+            }
+            return result;
         }
 
         private List<StructureRecipe> getMatchedRecipes(ITypedIngredient<?> ingredient) {
@@ -150,7 +155,7 @@ public final class JeiStructuresPlugin implements IModPlugin {
             return ingredient.getItemStack()
                     .map(ItemStack::getItem)
                     .map(lookup.recipesByItem::get)
-                    .orElse(null);
+                    .orElse(List.of());
         }
 
         private CachedLookup getLookup() {

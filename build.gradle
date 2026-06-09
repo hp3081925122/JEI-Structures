@@ -132,6 +132,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
     maven { url = 'https://maven.blamejared.com/' }
+    maven { url = 'https://cursemaven.com' }
     flatDir {
         dirs 'libs'
     }
@@ -143,7 +144,7 @@ dependencies {
     compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
     compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
     runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
-    implementation fg.deobf("blank:async-locator-forge-1.20-1.3.0:1.0")
+    implementation fg.deobf("curse.maven:async-locator-625069:4593926")
 
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }

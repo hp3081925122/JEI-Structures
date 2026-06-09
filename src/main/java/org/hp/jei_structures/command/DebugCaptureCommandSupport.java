@@ -3,7 +3,7 @@ package org.hp.jei_structures.command;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.core.registries.Registries;
+import net.minecraft.core.Registry;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -47,7 +47,7 @@ final class DebugCaptureCommandSupport {
     static int handleDebugCaptureStart(CommandSourceStack source, DebugStructureCaptureTypes.StartResult result) {
         return switch (result.state()) {
             case STARTED -> {
-                source.sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.start", result.structureCount(), result.speedMultiplier(), result.outputRoot()), true);
+                source.sendSuccess(Component.translatable("jei_structures.command.debug_capture.start", result.structureCount(), result.speedMultiplier(), result.outputRoot()), true);
                 yield 1;
             }
             case BUSY -> {
@@ -103,7 +103,7 @@ final class DebugCaptureCommandSupport {
             }
         }
         if (structureIds.isEmpty()) {
-            var registry = source.getServer().registryAccess().registry(Registries.STRUCTURE);
+            var registry = source.getServer().registryAccess().registry(Registry.STRUCTURE_REGISTRY);
             if (registry.isPresent()) {
                 for (Structure structure : registry.get()) {
                     ResourceLocation structureId = registry.get().getKey(structure);

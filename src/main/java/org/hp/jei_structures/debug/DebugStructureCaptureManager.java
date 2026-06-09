@@ -10,7 +10,6 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
 import net.minecraft.core.SectionPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceKey;
@@ -252,7 +251,7 @@ public final class DebugStructureCaptureManager {
         private Session(ServerPlayer player, List<StructureTarget> targets, int speedMultiplier) throws Exception {
             this.server = player.getServer();
             this.playerId = player.getUUID();
-            this.playerLevelKey = player.serverLevel().dimension();
+            this.playerLevelKey = player.getLevel().dimension();
             this.baseOrigin = player.blockPosition().immutable();
             this.baseYaw = player.getYRot();
             this.basePitch = player.getXRot();
@@ -266,7 +265,7 @@ public final class DebugStructureCaptureManager {
             Files.createDirectories(this.structureToMobsRoot);
             Files.createDirectories(this.structureLootBindingsRoot);
             Files.createDirectories(this.outputRoot);
-            this.lootResolver = new LootTableItemResolver(server.getResourceManager(), server.registryAccess().registryOrThrow(Registries.ITEM));
+            this.lootResolver = new LootTableItemResolver(server.getResourceManager(), server.registryAccess().registryOrThrow(Registry.ITEM_REGISTRY));
             this.cooldownTicks = 0;
             DebugCaptureOptimizationGuard.enable(this.playerId);
             DebugStructureCheckConcurrency.enable();
@@ -760,8 +759,9 @@ public final class DebugStructureCaptureManager {
         private void submitLocateRequest(MinecraftServer server, ServerLevel level, StructureTarget target) {
             UUID requestId = UUID.randomUUID();
             BlockPos locateOrigin = resolveLocateOrigin(level.dimension(), level);
-            Registry<Structure> structureRegistry = server.registryAccess().registryOrThrow(Registries.STRUCTURE);
-            Holder<Structure> structureHolder = structureRegistry.wrapAsHolder(target.structure());
+            Registry<Structure> structureRegistry = server.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
+            ResourceKey<Structure> structureKey = ResourceKey.create(Registry.STRUCTURE_REGISTRY, target.structureId());
+            Holder<Structure> structureHolder = structureRegistry.getHolderOrThrow(structureKey);
             HolderSet<Structure> structures = HolderSet.direct(structureHolder);
             currentDimensionLocateSubmitted++;
             AsyncLocator.LocateTask<Pair<BlockPos, Holder<Structure>>> locateTask;
@@ -1210,7 +1210,7 @@ public final class DebugStructureCaptureManager {
                 return;
             }
             CommandSourceStack source = player.createCommandSourceStack();
-            source.sendSuccess(() -> createPlayerMessage(key, args), false);
+            source.sendSuccess(createPlayerMessage(key, args), false);
         }
 
         private Component createPlayerMessage(String key, Object... args) {
