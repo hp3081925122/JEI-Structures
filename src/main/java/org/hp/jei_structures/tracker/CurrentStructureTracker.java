@@ -73,7 +73,9 @@ public final class CurrentStructureTracker {
         }
         ServerLevel level = player.getLevel();
         String previous = LAST_SENT_STRUCTURE.getOrDefault(player.getUUID(), "");
-        String current = findCurrentStructure(level, player, structures, previous);
+        String current = level.structureManager().hasAnyStructureAt(player.blockPosition())
+                ? findCurrentStructure(level, player, structures, previous)
+                : "";
         if (!current.equals(previous)) {
             LAST_SENT_STRUCTURE.put(player.getUUID(), current);
             JeiStructuresNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CurrentStructureMessage(current));
