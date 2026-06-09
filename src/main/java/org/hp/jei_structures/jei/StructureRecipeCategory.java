@@ -19,7 +19,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TooltipFlag;
 import org.hp.jei_structures.JeiStructures;
 
-import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -53,6 +52,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     private final IDrawable icon;
     private final Map<StructureRecipe, Integer> scrollOffsets = new IdentityHashMap<>();
     private StructureRecipe draggingScrollbarRecipe;
+    private ScreenOffset currentScreenOffset = new ScreenOffset(0, 0);
 
     public StructureRecipeCategory(IGuiHelper guiHelper) {
         this.background = guiHelper.createBlankDrawable(WIDTH, HEIGHT);
@@ -123,12 +123,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         if (isInsideScrollbar(mouseX, mouseY)) {
             return setScrollFromMouseY(recipe, mouseY);
         }
-        if (!isInsideViewport(mouseX, mouseY)) {
-            return false;
-        }
-        Minecraft minecraft = Minecraft.getInstance();
-        minecraft.setScreen(new StructureRecipeScreen(recipe, minecraft.screen));
-        return true;
+        return false;
     }
 
     @Override
@@ -167,7 +162,21 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             return false;
         }
         draggingScrollbarRecipe = recipe;
-        return setScrollFromMouseY(recipe, mouseY);
+        int thumbTravel = getThumbTravel(recipe);
+        if (thumbTravel <= 0) {
+            return false;
+        }
+        int delta = (int) Math.round(dragY * getMaxScrollOffset(recipe) / (double) thumbTravel);
+        if (delta == 0 && dragY != 0.0D) {
+            delta = dragY > 0.0D ? 1 : -1;
+        }
+        scrollOffsets.put(recipe, getScrollOffset(recipe) + delta);
+        clampScroll(recipe);
+        return true;
+    }
+
+    public void setScreenOffset(int x, int y) {
+        currentScreenOffset = new ScreenOffset(x, y);
     }
 
     static int getTextWrapPixelWidth() {
@@ -194,12 +203,12 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         int viewportTop = getViewportTop();
         int viewportBottom = getViewportBottom();
         int cardX = CONTENT_X + getCardLeftInset();
-        int cardY = CONTENT_Y + CONTENT_PADDING_Y - getScrollOffset(recipe);
+        int cardY = getViewportTop();
         int cardWidth = getCardWidth();
-        int cardHeight = recipe.getMergedContentHeight();
+        int cardHeight = getViewportBottom() - getViewportTop();
         drawInnerCard(poseStack, cardX, cardY, cardWidth, cardHeight);
 
-        int currentY = cardY;
+        int currentY = getViewportTop() - getScrollOffset(recipe);
         for (StructureRecipe.ContentBlock block : recipe.getContentBlocks()) {
             int blockEndY = currentY + block.getHeight(recipe);
             if (blockEndY >= viewportTop && currentY <= viewportBottom) {
@@ -261,7 +270,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         }
         int viewportTop = getViewportTop();
         int viewportBottom = getViewportBottom();
-        int currentY = CONTENT_Y + CONTENT_PADDING_Y - getScrollOffset(recipe);
+        int currentY = getViewportTop() - getScrollOffset(recipe);
         for (StructureRecipe.ContentBlock block : recipe.getContentBlocks()) {
             int blockY = currentY + block.getItemStartY(recipe);
             int ingredientCount = block.slots().size();
@@ -292,8 +301,9 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             GuiComponent.fill(poseStack, trackX + 1, trackTop + 1, trackX + SCROLLBAR_WIDTH - 1, trackBottom - 1, 0xFF8F8F8F);
             return;
         }
-        int thumbHeight = Math.max(MIN_SCROLL_MARKER_HEIGHT, CONTENT_HEIGHT * CONTENT_HEIGHT / Math.max(recipe.getTotalContentHeight(), 1));
-        int thumbTravel = Math.max(1, CONTENT_HEIGHT - 2 - thumbHeight);
+        int viewportHeight = getViewportHeight();
+        int thumbHeight = Math.max(MIN_SCROLL_MARKER_HEIGHT, viewportHeight * viewportHeight / Math.max(recipe.getMergedContentHeight(), 1));
+        int thumbTravel = getThumbTravel(recipe);
         int thumbY = trackTop + getScrollOffset(recipe) * thumbTravel / maxOffset;
         GuiComponent.fill(poseStack, trackX + 1, thumbY + 1, trackX + SCROLLBAR_WIDTH - 1, thumbY + 1 + thumbHeight, 0xFF777777);
     }
@@ -313,8 +323,9 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             scrollOffsets.put(recipe, 0);
             return false;
         }
-        int thumbHeight = Math.max(MIN_SCROLL_MARKER_HEIGHT, CONTENT_HEIGHT * CONTENT_HEIGHT / Math.max(recipe.getTotalContentHeight(), 1));
-        int thumbTravel = Math.max(1, CONTENT_HEIGHT - 2 - thumbHeight);
+        int viewportHeight = getViewportHeight();
+        int thumbHeight = Math.max(MIN_SCROLL_MARKER_HEIGHT, viewportHeight * viewportHeight / Math.max(recipe.getMergedContentHeight(), 1));
+        int thumbTravel = getThumbTravel(recipe);
         double relativeY = mouseY - getViewportTop() - 1 - (double) thumbHeight / 2.0D;
         int offset = (int) Math.round(relativeY * maxOffset / (double) thumbTravel);
         scrollOffsets.put(recipe, offset);
@@ -327,7 +338,13 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     private int getMaxScrollOffset(StructureRecipe recipe) {
-        return Math.max(0, recipe.getTotalContentHeight() - CONTENT_HEIGHT);
+        return Math.max(0, recipe.getMergedContentHeight() - getViewportHeight());
+    }
+
+    private static int getThumbTravel(StructureRecipe recipe) {
+        int viewportHeight = getViewportHeight();
+        int thumbHeight = Math.max(MIN_SCROLL_MARKER_HEIGHT, viewportHeight * viewportHeight / Math.max(recipe.getMergedContentHeight(), 1));
+        return Math.max(1, viewportHeight - 2 - thumbHeight);
     }
 
     private void clampScroll(StructureRecipe recipe) {
@@ -335,11 +352,15 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     private static int getViewportTop() {
-        return CONTENT_Y;
+        return CONTENT_Y + CONTENT_PADDING_Y;
     }
 
     private static int getViewportBottom() {
-        return getViewportTop() + CONTENT_HEIGHT;
+        return CONTENT_Y + CONTENT_HEIGHT;
+    }
+
+    private static int getViewportHeight() {
+        return getViewportBottom() - getViewportTop();
     }
 
     private static int getContentWidthWithoutScrollbar() {
@@ -380,10 +401,10 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         GuiComponent.fill(poseStack, x + 2, y + 2, x + 16, y + 16, 0xFFBDBDBD);
     }
 
-    private static void drawSlotIngredient(PoseStack poseStack, StructureRecipe.SlotDisplay slot, int x, int y) {
+    private void drawSlotIngredient(PoseStack poseStack, StructureRecipe.SlotDisplay slot, int x, int y) {
         Minecraft minecraft = Minecraft.getInstance();
         if (slot.kind() == StructureRecipe.SlotKind.ITEM && slot.itemStack() != null && !slot.itemStack().isEmpty()) {
-            ScreenOffset offset = getScreenOffset(poseStack);
+            ScreenOffset offset = currentScreenOffset;
             int screenX = x + offset.x();
             int screenY = y + offset.y();
             minecraft.getItemRenderer().renderAndDecorateItem(slot.itemStack(), screenX, screenY);
@@ -394,12 +415,6 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             BiomeIngredient.INSTANCE.render(poseStack, slot.biome());
             poseStack.popPose();
         }
-    }
-
-    private static ScreenOffset getScreenOffset(PoseStack poseStack) {
-        FloatBuffer buffer = FloatBuffer.allocate(16);
-        poseStack.last().pose().store(buffer);
-        return new ScreenOffset(Math.round(buffer.get(3)), Math.round(buffer.get(7)));
     }
 
     private static void drawTextIfVisible(PoseStack poseStack, Font font, Component text, int x, int y, int color, int viewportTop, int viewportBottom) {

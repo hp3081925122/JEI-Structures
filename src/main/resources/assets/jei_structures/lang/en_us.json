@@ -1,10 +1,7 @@
 {
   "jei_structures.category.structure_index": "Structure Index",
   "jei_structures.category.structure_page": "%s (%s/%s)",
-  "jei_structures.jei.open_details": "Open structure details",
-  "jei_structures.jei.open_details_hint": "Left-click this area to view full details",
   "jei_structures.jei.lookup_hint": "JEI is still used for item lookups",
-  "jei_structures.screen.close_hint": "Esc to return to JEI",
   "jei_structures.command.export.success": "JEI Structures index exported to: %s",
   "jei_structures.command.export.failure": "JEI Structures export failed: %s",
   "jei_structures.command.debug_capture.player_only": "This debug capture command can only be used by an in-game player",

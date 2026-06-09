@@ -1,10 +1,7 @@
 {
   "jei_structures.category.structure_index": "结构索引",
   "jei_structures.category.structure_page": "%s（%s/%s）",
-  "jei_structures.jei.open_details": "打开结构详情",
-  "jei_structures.jei.open_details_hint": "左键点击此区域查看完整信息",
   "jei_structures.jei.lookup_hint": "JEI 仍会用于物品查找结构",
-  "jei_structures.screen.close_hint": "Esc 返回 JEI",
   "jei_structures.command.export.success": "JEI Structures 结构索引已导出到：%s",
   "jei_structures.command.export.failure": "JEI Structures 导出失败：%s",
   "jei_structures.command.debug_capture.player_only": "该调试采集指令只能由游戏内玩家执行",

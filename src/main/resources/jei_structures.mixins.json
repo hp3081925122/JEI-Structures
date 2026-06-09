@@ -12,6 +12,7 @@
     "StructureCheckConcurrencyMixin"
   ],
   "client": [
+    "JeiRecipeLayoutDrawMixin",
     "JeiRecipeLayoutInputHandlerMixin"
   ],
   "injectors": {
