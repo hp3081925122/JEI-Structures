@@ -95,8 +95,14 @@ public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon
     public void getTooltip(ITooltipBuilder tooltip, StructureBiomeIcon biome, TooltipFlag tooltipFlag) {
         tooltip.add(getBiomeComponent(biome));
         ResourceLocation id = getResourceLocation(biome);
+        if (id != null) {
+            tooltip.add(StructureTextHelper.component("jei_structures.tooltip.biome_id", id.toString()).withStyle(ChatFormatting.DARK_GRAY));
+        }
         if (biome != null && !biome.dimensionIds().isEmpty()) {
             tooltip.add(StructureTextHelper.component("jei_structures.tooltip.biome_dimensions", StructureTextHelper.joinDimensionNames(biome.dimensionIds(), 6)));
+        }
+        if (biome != null && !biome.sourceSelectors().isEmpty()) {
+            tooltip.add(StructureTextHelper.component("jei_structures.tooltip.biome_source", StructureTextHelper.joinRawValues(biome.sourceSelectors(), 4)).withStyle(ChatFormatting.GRAY));
         }
         if (id != null && Minecraft.getInstance().options.advancedItemTooltips) {
             tooltip.add(Component.literal(id.toString()).withStyle(ChatFormatting.DARK_GRAY));

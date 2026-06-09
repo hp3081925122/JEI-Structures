@@ -82,6 +82,17 @@ public final class StructureTextHelper {
         return getFallbackName(generationStep);
     }
 
+    public static String getTerrainAdjustmentName(String terrainAdjustment) {
+        if (terrainAdjustment == null || terrainAdjustment.isBlank()) {
+            return translateOrFallback("jei_structures.terrain_adjustment.none", "none");
+        }
+        String translatedName = translate("jei_structures.terrain_adjustment." + terrainAdjustment);
+        if (!translatedName.isBlank()) {
+            return translatedName;
+        }
+        return getFallbackName(terrainAdjustment);
+    }
+
     public static String getBiomeName(String biomeId) {
         if (biomeId == null || biomeId.isBlank()) {
             return getFallbackName(biomeId);
@@ -112,6 +123,10 @@ public final class StructureTextHelper {
 
     public static String joinDimensionNames(List<String> dimensionIds, int limit) {
         return joinTranslated(dimensionIds, limit, StructureTextHelper::getDimensionName);
+    }
+
+    public static String joinRawValues(List<String> values, int limit) {
+        return joinTranslated(values, limit, value -> value);
     }
 
     public static MutableComponent getBiomeComponent(String biomeId) {
@@ -251,13 +266,13 @@ public final class StructureTextHelper {
     private static String getDimensionTranslationKey(ResourceLocation id) {
         if ("minecraft".equals(id.getNamespace())) {
             if ("overworld".equals(id.getPath())) {
-                return "flat_world_preset.minecraft.overworld";
+                return "jei_structures.dimension.minecraft.overworld";
             }
             if ("the_nether".equals(id.getPath()) || "nether".equals(id.getPath())) {
-                return "advancements.story.enter_the_nether.title";
+                return "jei_structures.dimension.minecraft.the_nether";
             }
             if ("the_end".equals(id.getPath()) || "end".equals(id.getPath())) {
-                return "biome.minecraft.the_end";
+                return "jei_structures.dimension.minecraft.the_end";
             }
         }
         return "dimension." + id.getNamespace() + "." + id.getPath().replace('/', '.');

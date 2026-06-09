@@ -10,7 +10,7 @@ import java.util.Map;
 
 public final class StructureIndexCache {
 
-    public static final int CURRENT_VERSION = 9;
+    public static final int CURRENT_VERSION = 10;
     public static final Gson GSON = new GsonBuilder()
             .disableHtmlEscaping()
             .setPrettyPrinting()
@@ -24,8 +24,10 @@ public final class StructureIndexCache {
         public String structureId = "";
         public String structureType = "";
         public String generationStep = "";
+        public String terrainAdjustment = "";
         public List<String> generationBiomes = new ArrayList<>();
         public List<String> resolvedGenerationBiomes = new ArrayList<>();
+        public List<GenerationBiomeGroup> generationBiomeGroups = new ArrayList<>();
         public Map<String, List<String>> generationBiomeDimensions = new LinkedHashMap<>();
         public List<String> templateIds = new ArrayList<>();
         public List<String> spawnOverridesEntities = new ArrayList<>();
@@ -51,6 +53,12 @@ public final class StructureIndexCache {
     public static final class SpawnerEntry {
         public String templateId = "";
         public String entityId = "";
+    }
+
+    public static final class GenerationBiomeGroup {
+        public String selector = "";
+        public String selectorType = "";
+        public List<String> resolvedBiomeIds = new ArrayList<>();
     }
 
     public static final class LootBinding {

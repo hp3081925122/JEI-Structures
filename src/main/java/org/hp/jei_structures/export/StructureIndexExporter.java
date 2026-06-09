@@ -130,8 +130,10 @@ public final class StructureIndexExporter {
         entry.structureId = structureId.toString();
         entry.structureType = getString(structureJson, "type");
         entry.generationStep = getGenerationStep(structureJson);
+        entry.terrainAdjustment = getTerrainAdjustment(structureJson);
         entry.generationBiomes = collectGenerationBiomes(structureJson);
         entry.resolvedGenerationBiomes = resolveGenerationBiomes(entry.generationBiomes, biomeRegistry);
+        entry.generationBiomeGroups = collectGenerationBiomeGroups(entry.generationBiomes, biomeRegistry);
         entry.generationBiomeDimensions = collectEntryBiomeDimensions(structureId, entry.resolvedGenerationBiomes, biomeDimensions);
 
         LinkedHashSet<String> templateIds = new LinkedHashSet<>();
@@ -346,6 +348,18 @@ public final class StructureIndexExporter {
         return "";
     }
 
+    private static String getTerrainAdjustment(JsonObject structureJson) {
+        String terrainAdjustment = getString(structureJson, "terrain_adaptation");
+        if (!terrainAdjustment.isBlank()) {
+            return terrainAdjustment;
+        }
+        JsonObject placement = getObject(structureJson, "placement");
+        if (placement != null) {
+            return getString(placement, "terrain_adaptation");
+        }
+        return "";
+    }
+
     private static List<String> collectGenerationBiomes(JsonObject structureJson) {
         LinkedHashSet<String> result = new LinkedHashSet<>();
         JsonElement biomes = structureJson.get("biomes");
@@ -367,6 +381,30 @@ public final class StructureIndexExporter {
                         .comparing(StructureIndexExporter::getBiomeDisplayName, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(String::compareToIgnoreCase))
                 .toList();
+    }
+
+    private static List<StructureIndexCache.GenerationBiomeGroup> collectGenerationBiomeGroups(List<String> selectors, Registry<Biome> biomeRegistry) {
+        if (selectors == null || selectors.isEmpty()) {
+            return List.of();
+        }
+        List<StructureIndexCache.GenerationBiomeGroup> groups = new ArrayList<>();
+        for (String selector : selectors) {
+            if (selector == null || selector.isBlank()) {
+                continue;
+            }
+            LinkedHashSet<String> resolved = new LinkedHashSet<>();
+            collectResolvedBiomeSelector(selector, biomeRegistry, resolved);
+            StructureIndexCache.GenerationBiomeGroup group = new StructureIndexCache.GenerationBiomeGroup();
+            group.selector = selector;
+            group.selectorType = selector.startsWith("#") ? "tag" : "biome";
+            group.resolvedBiomeIds = resolved.stream()
+                    .sorted(Comparator
+                            .comparing(StructureIndexExporter::getBiomeDisplayName, String.CASE_INSENSITIVE_ORDER)
+                            .thenComparing(String::compareToIgnoreCase))
+                    .toList();
+            groups.add(group);
+        }
+        return groups;
     }
 
     private static Map<String, List<String>> collectBiomeDimensions(MinecraftServer server, Registry<Biome> biomeRegistry) {

@@ -300,8 +300,10 @@ public final class StructureRecipe {
         copy.structureId = valueOrEmpty(entry.structureId);
         copy.structureType = valueOrEmpty(entry.structureType);
         copy.generationStep = valueOrEmpty(entry.generationStep);
+        copy.terrainAdjustment = valueOrEmpty(entry.terrainAdjustment);
         copy.generationBiomes = copyStrings(entry.generationBiomes);
         copy.resolvedGenerationBiomes = copyStrings(entry.resolvedGenerationBiomes);
+        copy.generationBiomeGroups = copyGenerationBiomeGroups(entry.generationBiomeGroups);
         copy.generationBiomeDimensions = copyStringListMap(entry.generationBiomeDimensions);
         copy.templateIds = copyStrings(entry.templateIds);
         copy.spawnOverridesEntities = copyStrings(entry.spawnOverridesEntities);
@@ -323,6 +325,24 @@ public final class StructureRecipe {
         copy.suspiciousBlocks = copyLootBindings(entry.suspiciousBlocks);
         copy.manualLootBindings = copyLootBindings(entry.manualLootBindings);
         return copy;
+    }
+
+    private static List<StructureIndexCache.GenerationBiomeGroup> copyGenerationBiomeGroups(List<StructureIndexCache.GenerationBiomeGroup> groups) {
+        if (groups == null || groups.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<StructureIndexCache.GenerationBiomeGroup> copies = new ArrayList<>(groups.size());
+        for (StructureIndexCache.GenerationBiomeGroup group : groups) {
+            if (group == null) {
+                continue;
+            }
+            StructureIndexCache.GenerationBiomeGroup copy = new StructureIndexCache.GenerationBiomeGroup();
+            copy.selector = valueOrEmpty(group.selector);
+            copy.selectorType = valueOrEmpty(group.selectorType);
+            copy.resolvedBiomeIds = copyStrings(group.resolvedBiomeIds);
+            copies.add(copy);
+        }
+        return copies;
     }
 
     private static List<StructureIndexCache.SpecialInfoEntry> copySpecialInfos(List<StructureIndexCache.SpecialInfoEntry> specialInfos) {
@@ -467,6 +487,7 @@ public final class StructureRecipe {
         List<ContentBlock> blocks = new ArrayList<>();
         int[] slotCounter = new int[]{0};
 
+        addGenerationInfoBlock(blocks, tooltipMap, slotCounter);
         addSpecialInfoBlock(blocks, tooltipMap, slotCounter);
         addSpecialBlocksBlock(blocks, slotCounter);
         addStructureEntitiesBlock(blocks, slotCounter);
@@ -480,6 +501,126 @@ public final class StructureRecipe {
             ));
         }
         return blocks;
+    }
+
+    private void addGenerationInfoBlock(List<ContentBlock> blocks, Map<String, List<Component>> tooltipMap, int[] slotCounter) {
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.translatable(
+                "jei_structures.generation_info.structure_type",
+                StructureTextHelper.getStructureTypeName(entry.structureType)
+        ));
+        lines.add(Component.translatable(
+                "jei_structures.generation_info.generation_step",
+                StructureTextHelper.getGenerationStepName(entry.generationStep)
+        ));
+        lines.add(Component.translatable(
+                "jei_structures.generation_info.terrain_adjustment",
+                StructureTextHelper.getTerrainAdjustmentName(entry.terrainAdjustment)
+        ));
+
+        List<GenerationBiomeSourceSummary> summaries = buildGenerationBiomeSourceSummaries();
+        if (summaries.isEmpty()) {
+            lines.add(Component.translatable("jei_structures.generation_info.no_biomes").withStyle(ChatFormatting.DARK_GRAY));
+        } else {
+            for (GenerationBiomeSourceSummary summary : summaries) {
+                if (summary.resolvedCount() > 0) {
+                    lines.add(Component.translatable(
+                            "jei_structures.generation_info.biome_source",
+                            summary.resolvedCount()
+                    ).withStyle(ChatFormatting.DARK_GRAY));
+                } else {
+                    lines.add(Component.translatable(
+                            "jei_structures.generation_info.biome_source_empty"
+                    ).withStyle(ChatFormatting.DARK_GRAY));
+                }
+            }
+        }
+
+        List<SlotDisplay> slots = new ArrayList<>();
+        for (GenerationBiomeDisplay display : buildGenerationBiomeDisplays()) {
+            String slotName = nextSlotName("generation_biome", slotCounter);
+            slots.add(SlotDisplay.biome(display.icon(), slotName));
+            tooltipMap.put(slotName, List.of(
+                    Component.translatable("jei_structures.tooltip.biome_source", StructureTextHelper.joinRawValues(display.sourceSelectors(), 4)).withStyle(ChatFormatting.GRAY)
+            ));
+        }
+
+        blocks.add(ContentBlock.leadCombinedGroup(
+                StructureTextHelper.component("jei_structures.section.generation_info"),
+                lines,
+                slots
+        ));
+    }
+
+    private List<GenerationBiomeSourceSummary> buildGenerationBiomeSourceSummaries() {
+        List<GenerationBiomeSourceSummary> summaries = new ArrayList<>();
+        if (entry.generationBiomeGroups != null && !entry.generationBiomeGroups.isEmpty()) {
+            for (StructureIndexCache.GenerationBiomeGroup group : entry.generationBiomeGroups) {
+                if (group == null) {
+                    continue;
+                }
+                summaries.add(new GenerationBiomeSourceSummary(
+                        valueOrUnknown(group.selector),
+                        countUniqueNonBlank(group.resolvedBiomeIds)
+                ));
+            }
+            return summaries;
+        }
+        if (entry.generationBiomes == null || entry.generationBiomes.isEmpty()) {
+            return summaries;
+        }
+        int resolvedCount = countUniqueNonBlank(entry.resolvedGenerationBiomes);
+        for (String selector : entry.generationBiomes) {
+            if (selector == null || selector.isBlank()) {
+                continue;
+            }
+            int count = selector.startsWith("#") ? resolvedCount : 1;
+            summaries.add(new GenerationBiomeSourceSummary(selector, count));
+        }
+        return summaries;
+    }
+
+    private List<GenerationBiomeDisplay> buildGenerationBiomeDisplays() {
+        LinkedHashMap<String, LinkedHashSet<String>> sourcesByBiomeId = new LinkedHashMap<>();
+        if (entry.generationBiomeGroups != null && !entry.generationBiomeGroups.isEmpty()) {
+            for (StructureIndexCache.GenerationBiomeGroup group : entry.generationBiomeGroups) {
+                if (group == null || group.resolvedBiomeIds == null) {
+                    continue;
+                }
+                String source = valueOrUnknown(group.selector);
+                for (String biomeId : group.resolvedBiomeIds) {
+                    addBiomeSource(sourcesByBiomeId, biomeId, source);
+                }
+            }
+        }
+        if (sourcesByBiomeId.isEmpty() && entry.resolvedGenerationBiomes != null) {
+            List<String> fallbackSources = entry.generationBiomes == null || entry.generationBiomes.isEmpty()
+                    ? List.of()
+                    : entry.generationBiomes;
+            for (String biomeId : entry.resolvedGenerationBiomes) {
+                if (fallbackSources.isEmpty()) {
+                    addBiomeSource(sourcesByBiomeId, biomeId, biomeId);
+                } else {
+                    for (String source : fallbackSources) {
+                        addBiomeSource(sourcesByBiomeId, biomeId, source);
+                    }
+                }
+            }
+        }
+        List<GenerationBiomeDisplay> displays = new ArrayList<>();
+        for (Map.Entry<String, LinkedHashSet<String>> biomeEntry : sourcesByBiomeId.entrySet()) {
+            ResourceLocation biomeId = ResourceLocation.tryParse(biomeEntry.getKey());
+            if (biomeId == null) {
+                continue;
+            }
+            List<String> dimensions = entry.generationBiomeDimensions.getOrDefault(biomeEntry.getKey(), List.of());
+            List<String> sources = new ArrayList<>(biomeEntry.getValue());
+            displays.add(new GenerationBiomeDisplay(new StructureBiomeIcon(biomeId, dimensions, sources), sources));
+        }
+        displays.sort(Comparator
+                .comparing((GenerationBiomeDisplay display) -> StructureTextHelper.getBiomeName(display.icon().biomeId().toString()), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(display -> display.icon().biomeId().toString(), String.CASE_INSENSITIVE_ORDER));
+        return displays;
     }
 
     private void addSpecialInfoBlock(List<ContentBlock> blocks, Map<String, List<Component>> tooltipMap, int[] slotCounter) {
@@ -704,6 +845,30 @@ public final class StructureRecipe {
                 tables.putIfAbsent(detail.lootTableId, copyLootTableDetail(detail));
             }
         }
+    }
+
+    private static void addBiomeSource(Map<String, LinkedHashSet<String>> sourcesByBiomeId, String biomeId, String source) {
+        if (biomeId == null || biomeId.isBlank()) {
+            return;
+        }
+        ResourceLocation id = ResourceLocation.tryParse(biomeId);
+        if (id == null) {
+            return;
+        }
+        sourcesByBiomeId.computeIfAbsent(id.toString(), key -> new LinkedHashSet<>()).add(valueOrUnknown(source));
+    }
+
+    private static int countUniqueNonBlank(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return 0;
+        }
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                unique.add(value);
+            }
+        }
+        return unique.size();
     }
 
     private static StructureIndexCache.LootTableDetail copyLootTableDetail(StructureIndexCache.LootTableDetail detail) {
@@ -1161,6 +1326,12 @@ public final class StructureRecipe {
     }
 
     private record SpecialInfoDisplay(String targetType, String targetId, String translationKey, ItemStack stack) {
+    }
+
+    private record GenerationBiomeSourceSummary(String selector, int resolvedCount) {
+    }
+
+    private record GenerationBiomeDisplay(StructureBiomeIcon icon, List<String> sourceSelectors) {
     }
 
     private record StoredItemsGroup(String blockId, List<String> itemIds) {
