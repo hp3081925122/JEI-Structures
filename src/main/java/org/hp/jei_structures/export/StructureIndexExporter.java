@@ -156,7 +156,7 @@ public final class StructureIndexExporter {
         if (structureJson != null) {
             startPool = getResourceLocation(structureJson, "start_pool");
             if (startPool != null) {
-                collectTemplatesFromPool(resourceManager, startPool, templateIds, new LinkedHashSet<>());
+                collectTemplatesFromPool(resourceManager, startPool, templateIds, new LinkedHashSet<>(), new LinkedHashSet<>());
             }
         }
         JeiStructures.LOGGER.debug("Structure {} start pool: {}, template count: {}", structureId, startPool, templateIds.size());
@@ -756,7 +756,7 @@ public final class StructureIndexExporter {
         }
     }
 
-    private static void collectTemplatesFromPool(ResourceManager resourceManager, ResourceLocation poolId, Set<String> templateIds, Set<String> visitedPools) {
+    private static void collectTemplatesFromPool(ResourceManager resourceManager, ResourceLocation poolId, Set<String> templateIds, Set<String> visitedPools, Set<String> scannedTemplates) {
         if (!visitedPools.add(poolId.toString())) {
             return;
         }
@@ -775,17 +775,18 @@ public final class StructureIndexExporter {
             JsonObject weighted = element.getAsJsonObject();
             JsonObject poolElement = getObject(weighted, "element");
             if (poolElement != null) {
-                collectTemplatesFromPoolElement(resourceManager, poolElement, templateIds, visitedPools);
+                collectTemplatesFromPoolElement(resourceManager, poolElement, templateIds, visitedPools, scannedTemplates);
             }
         }
     }
 
-    private static void collectTemplatesFromPoolElement(ResourceManager resourceManager, JsonObject element, Set<String> templateIds, Set<String> visitedPools) {
+    private static void collectTemplatesFromPoolElement(ResourceManager resourceManager, JsonObject element, Set<String> templateIds, Set<String> visitedPools, Set<String> scannedTemplates) {
         String elementType = getString(element, "element_type");
         if ("minecraft:single_pool_element".equals(elementType) || "minecraft:legacy_single_pool_element".equals(elementType)) {
             ResourceLocation location = getResourceLocation(element, "location");
             if (location != null && !"minecraft:empty".equals(location.toString())) {
                 templateIds.add(location.toString());
+                collectChildPoolsFromTemplate(resourceManager, location, templateIds, visitedPools, scannedTemplates);
             }
             return;
         }
@@ -796,14 +797,38 @@ public final class StructureIndexExporter {
             }
             for (JsonElement child : children) {
                 if (child.isJsonObject()) {
-                    collectTemplatesFromPoolElement(resourceManager, child.getAsJsonObject(), templateIds, visitedPools);
+                    collectTemplatesFromPoolElement(resourceManager, child.getAsJsonObject(), templateIds, visitedPools, scannedTemplates);
                 }
             }
             return;
         }
         ResourceLocation projectionPool = getResourceLocation(element, "pool");
         if (projectionPool != null) {
-            collectTemplatesFromPool(resourceManager, projectionPool, templateIds, visitedPools);
+            collectTemplatesFromPool(resourceManager, projectionPool, templateIds, visitedPools, scannedTemplates);
+        }
+    }
+
+    private static void collectChildPoolsFromTemplate(ResourceManager resourceManager, ResourceLocation templateId, Set<String> templateIds, Set<String> visitedPools, Set<String> scannedTemplates) {
+        if (templateId == null || !scannedTemplates.add(templateId.toString())) {
+            return;
+        }
+        CompoundTag root = readTemplateRoot(resourceManager, templateId);
+        if (root == null) {
+            return;
+        }
+        List<String> palette = readTemplatePalette(root);
+        ListTag blocks = root.getList("blocks", Tag.TAG_COMPOUND);
+        for (int index = 0; index < blocks.size(); index++) {
+            CompoundTag block = blocks.getCompound(index);
+            int stateIndex = block.getInt("state");
+            String blockId = stateIndex >= 0 && stateIndex < palette.size() ? palette.get(stateIndex) : "";
+            if (!"minecraft:jigsaw".equals(blockId) || !block.contains("nbt", Tag.TAG_COMPOUND)) {
+                continue;
+            }
+            ResourceLocation childPool = getNbtResourceLocation(block.getCompound("nbt"), "pool");
+            if (childPool != null) {
+                collectTemplatesFromPool(resourceManager, childPool, templateIds, visitedPools, scannedTemplates);
+            }
         }
     }
 
@@ -811,14 +836,21 @@ public final class StructureIndexExporter {
         if (templateId == null) {
             return null;
         }
+        CompoundTag root = readTemplateRoot(resourceManager, templateId);
+        if (root == null) {
+            return null;
+        }
+
+        return parseTemplate(templateId, root);
+    }
+
+    private static CompoundTag readTemplateRoot(ResourceManager resourceManager, ResourceLocation templateId) {
         Optional<Resource> resource = resourceManager.getResource(toTemplateLocation(templateId));
         if (resource.isEmpty()) {
             return null;
         }
-
         try (InputStream inputStream = resource.get().open()) {
-            CompoundTag root = NbtIo.readCompressed(inputStream);
-            return parseTemplate(templateId, root);
+            return NbtIo.readCompressed(inputStream);
         } catch (Exception exception) {
             JeiStructures.LOGGER.warn("Failed to read structure template: {}", templateId, exception);
             return null;
@@ -827,11 +859,7 @@ public final class StructureIndexExporter {
 
     private static TemplateScanResult parseTemplate(ResourceLocation templateId, CompoundTag root) {
         TemplateScanResult result = new TemplateScanResult();
-        List<String> palette = new ArrayList<>();
-        ListTag paletteTag = root.getList("palette", Tag.TAG_COMPOUND);
-        for (int index = 0; index < paletteTag.size(); index++) {
-            palette.add(paletteTag.getCompound(index).getString("Name"));
-        }
+        List<String> palette = readTemplatePalette(root);
 
         ListTag blocks = root.getList("blocks", Tag.TAG_COMPOUND);
         for (int index = 0; index < blocks.size(); index++) {
@@ -950,6 +978,23 @@ public final class StructureIndexExporter {
             return blockEntity.getString("loot_table");
         }
         return "";
+    }
+
+    private static List<String> readTemplatePalette(CompoundTag root) {
+        List<String> palette = new ArrayList<>();
+        ListTag paletteTag = root.getList("palette", Tag.TAG_COMPOUND);
+        for (int index = 0; index < paletteTag.size(); index++) {
+            palette.add(paletteTag.getCompound(index).getString("Name"));
+        }
+        return palette;
+    }
+
+    private static ResourceLocation getNbtResourceLocation(CompoundTag tag, String key) {
+        if (tag == null || !tag.contains(key, Tag.TAG_STRING)) {
+            return null;
+        }
+        String value = tag.getString(key);
+        return value.isBlank() ? null : ResourceLocation.tryParse(value);
     }
 
     private static JsonObject readJson(ResourceManager resourceManager, ResourceLocation location) {
