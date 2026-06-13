@@ -160,6 +160,9 @@ public final class StructureBindingLoader {
         binding.blockId = getString(json, "block_id");
         binding.lootTables = readStringArray(json.get("loot_tables"));
         binding.items = readStringArray(json.get("items"));
+        LinkedHashSet<String> items = new LinkedHashSet<>(binding.items);
+        items.addAll(readStringArray(json.get("stored_items")));
+        binding.items = new ArrayList<>(items);
         if (binding.structureId.isBlank()) {
             return null;
         }

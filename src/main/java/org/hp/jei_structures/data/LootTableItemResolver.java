@@ -102,6 +102,9 @@ public final class LootTableItemResolver {
         detail.lootTableId = lootTableId.toString();
         JsonObject json = readJson(toLootTableLocation(lootTableId));
         if (json == null) {
+            json = readJson(toLegacyLootTableLocation(lootTableId));
+        }
+        if (json == null) {
             JeiStructures.LOGGER.debug("Loot table resource was not found: {}", lootTableId);
             return detail;
         }
@@ -385,6 +388,10 @@ public final class LootTableItemResolver {
     }
 
     private ResourceLocation toLootTableLocation(ResourceLocation lootTableId) {
+        return ResourceLocation.fromNamespaceAndPath(lootTableId.getNamespace(), "loot_table/" + lootTableId.getPath() + ".json");
+    }
+
+    private ResourceLocation toLegacyLootTableLocation(ResourceLocation lootTableId) {
         return ResourceLocation.fromNamespaceAndPath(lootTableId.getNamespace(), "loot_tables/" + lootTableId.getPath() + ".json");
     }
 
