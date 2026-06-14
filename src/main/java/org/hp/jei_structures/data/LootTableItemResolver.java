@@ -4,16 +4,26 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunctions;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.phys.Vec3;
 import org.hp.jei_structures.JeiStructures;
 
 import java.io.Reader;
@@ -34,15 +44,19 @@ public final class LootTableItemResolver {
     private final ResourceManager resourceManager;
     private final Registry<Item> itemRegistry;
     private final HolderLookup.Provider lookupProvider;
+    private final ServerLevel lootContextLevel;
+    private final RegistryOps<JsonElement> registryOps;
     private final Map<String, Set<String>> itemCache = new HashMap<>();
     private final Map<String, StructureIndexCache.LootTableDetail> detailCache = new HashMap<>();
     private final Set<String> resolvingItems = new HashSet<>();
     private final Set<String> resolvingDetails = new HashSet<>();
 
-    public LootTableItemResolver(ResourceManager resourceManager, Registry<Item> itemRegistry, HolderLookup.Provider lookupProvider) {
+    public LootTableItemResolver(ResourceManager resourceManager, Registry<Item> itemRegistry, HolderLookup.Provider lookupProvider, ServerLevel lootContextLevel) {
         this.resourceManager = resourceManager;
         this.itemRegistry = itemRegistry;
         this.lookupProvider = lookupProvider;
+        this.lootContextLevel = lootContextLevel;
+        this.registryOps = RegistryOps.create(JsonOps.INSTANCE, lookupProvider);
     }
 
     public Set<String> resolveLootItems(ResourceLocation lootTableId) {
@@ -115,7 +129,9 @@ public final class LootTableItemResolver {
         if (pools == null) {
             return detail;
         }
-        for (JsonElement poolElement : pools) {
+        List<JsonElement> tableFunctions = getElements(json, "functions");
+        for (int poolIndex = 0; poolIndex < pools.size(); poolIndex++) {
+            JsonElement poolElement = pools.get(poolIndex);
             if (poolElement == null || !poolElement.isJsonObject()) {
                 continue;
             }
@@ -128,8 +144,21 @@ public final class LootTableItemResolver {
             String rollsText = describeNumberProvider(pool.get("rolls"), "1");
             String bonusRollsText = describeNumberProvider(pool.get("bonus_rolls"), "0");
             List<StructureIndexCache.LootTextEntry> poolConditions = describeConditions(pool.get("conditions"));
-            for (JsonElement entryElement : entries) {
-                appendEntries(detail.entries, lootTableId, entryElement, totalWeight, rollsText, bonusRollsText, poolConditions, List.of());
+            List<JsonElement> poolFunctions = mergeFunctionElements(tableFunctions, pool.get("functions"));
+            for (int entryIndex = 0; entryIndex < entries.size(); entryIndex++) {
+                JsonElement entryElement = entries.get(entryIndex);
+                appendEntries(
+                        detail.entries,
+                        lootTableId,
+                        entryElement,
+                        totalWeight,
+                        rollsText,
+                        bonusRollsText,
+                        poolConditions,
+                        List.of(),
+                        poolFunctions,
+                        "pool[" + poolIndex + "].entry[" + entryIndex + "]"
+                );
             }
         }
         detail.entries.sort(Comparator
@@ -138,7 +167,18 @@ public final class LootTableItemResolver {
         return detail;
     }
 
-    private void appendEntries(List<StructureIndexCache.LootItemEntry> output, ResourceLocation rootLootTableId, JsonElement element, int totalWeight, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> inheritedChanceNotes, List<StructureIndexCache.LootTextEntry> inheritedCountNotes) {
+    private void appendEntries(
+            List<StructureIndexCache.LootItemEntry> output,
+            ResourceLocation rootLootTableId,
+            JsonElement element,
+            int totalWeight,
+            String rollsText,
+            String bonusRollsText,
+            List<StructureIndexCache.LootTextEntry> inheritedChanceNotes,
+            List<StructureIndexCache.LootTextEntry> inheritedCountNotes,
+            List<JsonElement> inheritedFunctions,
+            String entryPath
+    ) {
         if (element == null || !element.isJsonObject()) {
             return;
         }
@@ -146,6 +186,7 @@ public final class LootTableItemResolver {
         String type = getString(object, "type");
         List<StructureIndexCache.LootTextEntry> mergedChanceNotes = mergeNotes(inheritedChanceNotes, describeConditions(object.get("conditions")));
         List<StructureIndexCache.LootTextEntry> mergedCountNotes = mergeNotes(inheritedCountNotes, describeFunctions(object.get("functions")));
+        List<JsonElement> mergedFunctions = mergeFunctionElements(inheritedFunctions, object.get("functions"));
         int weight = Math.max(getInt(object, "weight", 1), 1);
         int quality = getInt(object, "quality", 0);
         List<StructureIndexCache.LootTextEntry> chanceNotes = mergeNotes(List.of(buildRelativeWeightNote(weight, totalWeight)), mergedChanceNotes);
@@ -153,7 +194,8 @@ public final class LootTableItemResolver {
         if ("minecraft:item".equals(type)) {
             ResourceLocation itemId = getResourceLocation(object, "name");
             if (itemId != null && BuiltInRegistries.ITEM.containsKey(itemId)) {
-                output.add(createLootItemEntry(createBaseStack(itemId), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
+                net.minecraft.world.item.ItemStack stack = applyFunctions(createBaseStack(itemId), rootLootTableId, mergedFunctions, entryPath + "/item:" + itemId);
+                output.add(createLootItemEntry(stack, weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -166,7 +208,8 @@ public final class LootTableItemResolver {
             List<String> tagItems = expandTag(tagId);
             List<StructureIndexCache.LootTextEntry> tagChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.tag_expansion", tagId.toString())));
             for (String itemId : tagItems) {
-                output.add(createLootItemEntry(ItemStackSnapshotHelper.createFallbackStack(itemId), weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes)));
+                net.minecraft.world.item.ItemStack stack = applyFunctions(ItemStackSnapshotHelper.createFallbackStack(itemId), rootLootTableId, mergedFunctions, entryPath + "/tag:" + itemId);
+                output.add(createLootItemEntry(stack, weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -183,8 +226,14 @@ public final class LootTableItemResolver {
                     if (childEntry == null || childEntry.itemId == null || childEntry.itemId.isBlank()) {
                         continue;
                     }
-                    output.add(createLootItemEntry(
+                    net.minecraft.world.item.ItemStack stack = applyFunctions(
                             restoreStack(childEntry),
+                            rootLootTableId,
+                            mergedFunctions,
+                            entryPath + "/loot_table:" + childLootTable + "/child:" + childEntry.itemId
+                    );
+                    output.add(createLootItemEntry(
+                            stack,
                             weight,
                             quality,
                             rollsText,
@@ -206,22 +255,25 @@ public final class LootTableItemResolver {
             if (children == null) {
                 return;
             }
-            for (JsonElement child : children) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
+            for (int childIndex = 0; childIndex < children.size(); childIndex++) {
+                JsonElement child = children.get(childIndex);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes, mergedFunctions, entryPath + "/child[" + childIndex + "]");
             }
             return;
         }
 
         JsonArray children = getArray(object, "children");
         if (children != null) {
-            for (JsonElement child : children) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
+            for (int childIndex = 0; childIndex < children.size(); childIndex++) {
+                JsonElement child = children.get(childIndex);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes, mergedFunctions, entryPath + "/child[" + childIndex + "]");
             }
         }
         JsonArray nestedEntries = getArray(object, "entries");
         if (nestedEntries != null) {
-            for (JsonElement child : nestedEntries) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
+            for (int childIndex = 0; childIndex < nestedEntries.size(); childIndex++) {
+                JsonElement child = nestedEntries.get(childIndex);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes, mergedFunctions, entryPath + "/entry[" + childIndex + "]");
             }
         }
     }
@@ -288,6 +340,102 @@ public final class LootTableItemResolver {
         snapshot.itemId = entry.itemId != null ? entry.itemId : "";
         snapshot.stackTag = entry.itemStackTag != null ? entry.itemStackTag : "";
         return ItemStackSnapshotHelper.parseSnapshot(snapshot, lookupProvider);
+    }
+
+    private net.minecraft.world.item.ItemStack applyFunctions(net.minecraft.world.item.ItemStack originalStack, ResourceLocation lootTableId, List<JsonElement> functionElements, String entryPath) {
+        if (originalStack == null || originalStack.isEmpty() || functionElements == null || functionElements.isEmpty() || lootContextLevel == null) {
+            return originalStack;
+        }
+        net.minecraft.world.item.ItemStack stack = originalStack.copy();
+        LootContext context = createFunctionContext(lootTableId, entryPath);
+        for (LootItemFunction function : decodeFunctions(functionElements)) {
+            try {
+                net.minecraft.world.item.ItemStack modified = function.apply(stack, context);
+                if (modified != null) {
+                    stack = modified;
+                }
+            } catch (Exception exception) {
+                JeiStructures.LOGGER.debug("Failed to apply loot function while resolving {} at {}", lootTableId, entryPath, exception);
+            }
+        }
+        return stack;
+    }
+
+    private LootContext createFunctionContext(ResourceLocation lootTableId, String entryPath) {
+        LootParams params = new LootParams.Builder(lootContextLevel)
+                .withParameter(LootContextParams.ORIGIN, Vec3.ZERO)
+                .create(LootContextParamSets.CHEST);
+        long seed = computeSeed(lootTableId, entryPath);
+        return new LootContext.Builder(params)
+                .withOptionalRandomSeed(seed)
+                .withQueriedLootTableId(lootTableId)
+                .create(Optional.empty());
+    }
+
+    private List<LootItemFunction> decodeFunctions(List<JsonElement> functionElements) {
+        if (functionElements == null || functionElements.isEmpty()) {
+            return List.of();
+        }
+        List<LootItemFunction> functions = new ArrayList<>(functionElements.size());
+        for (JsonElement functionElement : functionElements) {
+            if (functionElement == null || functionElement.isJsonNull()) {
+                continue;
+            }
+            try {
+                LootItemFunctions.ROOT_CODEC.parse(registryOps, functionElement).result().ifPresent(functions::add);
+            } catch (Exception exception) {
+                JeiStructures.LOGGER.debug("Failed to decode loot function: {}", functionElement, exception);
+            }
+        }
+        return List.copyOf(functions);
+    }
+
+    private static List<JsonElement> mergeFunctionElements(List<JsonElement> inheritedFunctions, JsonElement localFunctionsElement) {
+        List<JsonElement> localFunctions = toFunctionElements(localFunctionsElement);
+        if ((inheritedFunctions == null || inheritedFunctions.isEmpty()) && localFunctions.isEmpty()) {
+            return List.of();
+        }
+        List<JsonElement> merged = new ArrayList<>();
+        if (inheritedFunctions != null && !inheritedFunctions.isEmpty()) {
+            merged.addAll(inheritedFunctions);
+        }
+        merged.addAll(localFunctions);
+        return List.copyOf(merged);
+    }
+
+    private static List<JsonElement> getElements(JsonObject object, String key) {
+        if (object == null) {
+            return List.of();
+        }
+        return toFunctionElements(object.get(key));
+    }
+
+    private static List<JsonElement> toFunctionElements(JsonElement element) {
+        if (element == null || element.isJsonNull() || !element.isJsonArray()) {
+            return List.of();
+        }
+        JsonArray array = element.getAsJsonArray();
+        if (array.isEmpty()) {
+            return List.of();
+        }
+        List<JsonElement> elements = new ArrayList<>(array.size());
+        for (JsonElement value : array) {
+            if (value != null && !value.isJsonNull()) {
+                elements.add(value);
+            }
+        }
+        return elements.isEmpty() ? List.of() : List.copyOf(elements);
+    }
+
+    private static long computeSeed(ResourceLocation lootTableId, String entryPath) {
+        long value = 0x9E3779B97F4A7C15L;
+        if (lootTableId != null) {
+            value ^= lootTableId.toString().hashCode();
+        }
+        if (entryPath != null && !entryPath.isBlank()) {
+            value = value * 31L + entryPath.hashCode();
+        }
+        return value == 0L ? 1L : value;
     }
 
     private StructureIndexCache.LootTextEntry buildRelativeWeightNote(int weight, int totalWeight) {

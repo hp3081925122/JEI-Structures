@@ -85,6 +85,10 @@ public final class StructureIndexExporter {
         Registry<Item> itemRegistry = server.registryAccess().registryOrThrow(Registries.ITEM);
         Registry<Biome> biomeRegistry = registryAccess.registryOrThrow(Registries.BIOME);
         Registry<net.minecraft.world.level.levelgen.structure.Structure> structureRegistry = server.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        ServerLevel lootResolverLevel = server.overworld();
+        if (lootResolverLevel == null) {
+            lootResolverLevel = server.getAllLevels().iterator().next();
+        }
         Map<String, List<String>> biomeDimensions = collectBiomeDimensions(server, biomeRegistry);
         StructureBindingData bindingData = StructureBindingLoader.loadAll(resourceManager);
         StructureBlacklistData blacklistData = StructureBlacklistLoader.loadAll(resourceManager);
@@ -94,7 +98,7 @@ public final class StructureIndexExporter {
         StructureIndexCache cache = new StructureIndexCache();
         cache.generatedAt = Instant.now().toString();
 
-        LootTableItemResolver lootResolver = new LootTableItemResolver(resourceManager, itemRegistry, registryAccess);
+        LootTableItemResolver lootResolver = new LootTableItemResolver(resourceManager, itemRegistry, registryAccess, lootResolverLevel);
         List<StructureIndexCache.StructureEntry> entries = new ArrayList<>();
         int skippedCount = 0;
 

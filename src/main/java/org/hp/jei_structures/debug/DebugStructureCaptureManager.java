@@ -282,7 +282,7 @@ public final class DebugStructureCaptureManager {
             Files.createDirectories(this.structureToMobsRoot);
             Files.createDirectories(this.structureLootBindingsRoot);
             Files.createDirectories(this.outputRoot);
-            this.lootResolver = new LootTableItemResolver(server.getResourceManager(), server.registryAccess().registryOrThrow(Registries.ITEM), server.registryAccess());
+            this.lootResolver = new LootTableItemResolver(server.getResourceManager(), server.registryAccess().registryOrThrow(Registries.ITEM), server.registryAccess(), server.overworld());
             this.cooldownTicks = 0;
             DebugCaptureOptimizationGuard.enable(this.playerId);
             DebugStructureCheckConcurrency.enable();
