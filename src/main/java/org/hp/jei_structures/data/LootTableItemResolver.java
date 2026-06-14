@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -32,14 +33,16 @@ public final class LootTableItemResolver {
 
     private final ResourceManager resourceManager;
     private final Registry<Item> itemRegistry;
+    private final HolderLookup.Provider lookupProvider;
     private final Map<String, Set<String>> itemCache = new HashMap<>();
     private final Map<String, StructureIndexCache.LootTableDetail> detailCache = new HashMap<>();
     private final Set<String> resolvingItems = new HashSet<>();
     private final Set<String> resolvingDetails = new HashSet<>();
 
-    public LootTableItemResolver(ResourceManager resourceManager, Registry<Item> itemRegistry) {
+    public LootTableItemResolver(ResourceManager resourceManager, Registry<Item> itemRegistry, HolderLookup.Provider lookupProvider) {
         this.resourceManager = resourceManager;
         this.itemRegistry = itemRegistry;
+        this.lookupProvider = lookupProvider;
     }
 
     public Set<String> resolveLootItems(ResourceLocation lootTableId) {
@@ -150,7 +153,7 @@ public final class LootTableItemResolver {
         if ("minecraft:item".equals(type)) {
             ResourceLocation itemId = getResourceLocation(object, "name");
             if (itemId != null && BuiltInRegistries.ITEM.containsKey(itemId)) {
-                output.add(createLootItemEntry(itemId.toString(), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
+                output.add(createLootItemEntry(createBaseStack(itemId), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -163,7 +166,7 @@ public final class LootTableItemResolver {
             List<String> tagItems = expandTag(tagId);
             List<StructureIndexCache.LootTextEntry> tagChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.tag_expansion", tagId.toString())));
             for (String itemId : tagItems) {
-                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes)));
+                output.add(createLootItemEntry(ItemStackSnapshotHelper.createFallbackStack(itemId), weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -174,8 +177,26 @@ public final class LootTableItemResolver {
                 return;
             }
             List<StructureIndexCache.LootTextEntry> childChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.nested_loot_table", childLootTable.toString())));
-            for (String itemId : resolveLootItems(childLootTable)) {
-                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, childChanceNotes, finalizeCountNotes(mergedCountNotes)));
+            StructureIndexCache.LootTableDetail childDetail = resolveLootTableDetail(childLootTable);
+            if (childDetail != null && childDetail.entries != null && !childDetail.entries.isEmpty()) {
+                for (StructureIndexCache.LootItemEntry childEntry : childDetail.entries) {
+                    if (childEntry == null || childEntry.itemId == null || childEntry.itemId.isBlank()) {
+                        continue;
+                    }
+                    output.add(createLootItemEntry(
+                            restoreStack(childEntry),
+                            weight,
+                            quality,
+                            rollsText,
+                            bonusRollsText,
+                            childChanceNotes,
+                            finalizeCountNotes(mergedCountNotes)
+                    ));
+                }
+            } else {
+                for (String itemId : resolveLootItems(childLootTable)) {
+                    output.add(createLootItemEntry(ItemStackSnapshotHelper.createFallbackStack(itemId), weight, quality, rollsText, bonusRollsText, childChanceNotes, finalizeCountNotes(mergedCountNotes)));
+                }
             }
             return;
         }
@@ -236,9 +257,11 @@ public final class LootTableItemResolver {
         return Math.max(getInt(object, "weight", 1), 1);
     }
 
-    private StructureIndexCache.LootItemEntry createLootItemEntry(String itemId, int weight, int quality, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> chanceNotes, List<StructureIndexCache.LootTextEntry> countNotes) {
+    private StructureIndexCache.LootItemEntry createLootItemEntry(net.minecraft.world.item.ItemStack stack, int weight, int quality, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> chanceNotes, List<StructureIndexCache.LootTextEntry> countNotes) {
         StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
-        entry.itemId = itemId;
+        StructureIndexCache.ItemStackSnapshot snapshot = ItemStackSnapshotHelper.createSnapshot(stack, lookupProvider);
+        entry.itemId = snapshot != null ? ItemStackSnapshotHelper.snapshotItemId(snapshot) : "";
+        entry.itemStackTag = snapshot != null && snapshot.stackTag != null ? snapshot.stackTag : "";
         entry.weight = weight;
         entry.quality = quality;
         entry.rollsText = fallbackText(rollsText, "1");
@@ -248,6 +271,23 @@ public final class LootTableItemResolver {
         entry.chanceText = notesToEnglish(entry.chanceNotes, "Unknown relative weight");
         entry.countText = notesToEnglish(entry.countNotes, "Default count");
         return entry;
+    }
+
+    private net.minecraft.world.item.ItemStack createBaseStack(ResourceLocation itemId) {
+        if (itemId == null || !BuiltInRegistries.ITEM.containsKey(itemId)) {
+            return net.minecraft.world.item.ItemStack.EMPTY;
+        }
+        return new net.minecraft.world.item.ItemStack(BuiltInRegistries.ITEM.get(itemId));
+    }
+
+    private net.minecraft.world.item.ItemStack restoreStack(StructureIndexCache.LootItemEntry entry) {
+        if (entry == null) {
+            return net.minecraft.world.item.ItemStack.EMPTY;
+        }
+        StructureIndexCache.ItemStackSnapshot snapshot = new StructureIndexCache.ItemStackSnapshot();
+        snapshot.itemId = entry.itemId != null ? entry.itemId : "";
+        snapshot.stackTag = entry.itemStackTag != null ? entry.itemStackTag : "";
+        return ItemStackSnapshotHelper.parseSnapshot(snapshot, lookupProvider);
     }
 
     private StructureIndexCache.LootTextEntry buildRelativeWeightNote(int weight, int totalWeight) {
@@ -407,6 +447,7 @@ public final class LootTableItemResolver {
             }
             StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
             entry.itemId = sourceEntry.itemId != null ? sourceEntry.itemId : "";
+            entry.itemStackTag = sourceEntry.itemStackTag != null ? sourceEntry.itemStackTag : "";
             entry.weight = sourceEntry.weight;
             entry.quality = sourceEntry.quality;
             entry.rollsText = sourceEntry.rollsText != null ? sourceEntry.rollsText : "";

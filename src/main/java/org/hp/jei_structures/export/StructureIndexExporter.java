@@ -33,6 +33,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.storage.loot.LootTable;
 import org.hp.jei_structures.JeiStructures;
+import org.hp.jei_structures.data.ItemStackSnapshotHelper;
 import org.hp.jei_structures.data.LootTableItemResolver;
 import org.hp.jei_structures.data.StoredItemNbtReader;
 import org.hp.jei_structures.data.StructureBlacklistData;
@@ -93,7 +94,7 @@ public final class StructureIndexExporter {
         StructureIndexCache cache = new StructureIndexCache();
         cache.generatedAt = Instant.now().toString();
 
-        LootTableItemResolver lootResolver = new LootTableItemResolver(resourceManager, itemRegistry);
+        LootTableItemResolver lootResolver = new LootTableItemResolver(resourceManager, itemRegistry, registryAccess);
         List<StructureIndexCache.StructureEntry> entries = new ArrayList<>();
         int skippedCount = 0;
 
@@ -261,10 +262,12 @@ public final class StructureIndexExporter {
             lootBinding.blockId = binding.blockId != null ? binding.blockId : "";
             lootBinding.lootTableId = binding.lootTables.isEmpty() ? "" : binding.lootTables.get(0);
             lootBinding.storedItemIds = new ArrayList<>(new LinkedHashSet<>(binding.items));
+            lootBinding.storedItemStacks = copyItemStackSnapshots(binding.itemStacks);
             if (isLootBindingContainerBlocked(structureId, lootBinding, blacklistData)) {
                 continue;
             }
             LinkedHashSet<String> itemIds = new LinkedHashSet<>(lootBinding.storedItemIds);
+            mergeSnapshotItemIds(itemIds, lootBinding.storedItemStacks);
             for (String lootTableId : binding.lootTables) {
                 if (blacklistData != null && blacklistData.isLootTableBlocked(structureId.toString(), lootTableId)) {
                     continue;
@@ -345,6 +348,7 @@ public final class StructureIndexExporter {
         if (binding.storedItemIds != null) {
             itemIds.addAll(binding.storedItemIds);
         }
+        mergeSnapshotItemIds(itemIds, binding.storedItemStacks);
         if (binding.lootTables != null) {
             for (StructureIndexCache.LootTableDetail detail : binding.lootTables) {
                 if (detail == null || detail.entries == null) {
@@ -374,6 +378,7 @@ public final class StructureIndexExporter {
             return;
         }
         LinkedHashSet<String> itemIds = new LinkedHashSet<>(binding.storedItemIds);
+        mergeSnapshotItemIds(itemIds, binding.storedItemStacks);
         if (binding.lootTableId != null && !binding.lootTableId.isBlank()) {
             if (binding.lootTables.isEmpty()) {
                 StructureIndexCache.LootTableDetail detail = buildLootTableDetail(binding.lootTableId, lootResolver);
@@ -674,6 +679,35 @@ public final class StructureIndexExporter {
         return new ArrayList<>(merged);
     }
 
+    private static void mergeSnapshotItemIds(Set<String> output, List<StructureIndexCache.ItemStackSnapshot> snapshots) {
+        if (output == null || snapshots == null || snapshots.isEmpty()) {
+            return;
+        }
+        for (StructureIndexCache.ItemStackSnapshot snapshot : snapshots) {
+            String itemId = ItemStackSnapshotHelper.snapshotItemId(snapshot);
+            if (itemId != null && !itemId.isBlank()) {
+                output.add(itemId);
+            }
+        }
+    }
+
+    private static List<StructureIndexCache.ItemStackSnapshot> copyItemStackSnapshots(List<StructureIndexCache.ItemStackSnapshot> snapshots) {
+        if (snapshots == null || snapshots.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<StructureIndexCache.ItemStackSnapshot> copies = new ArrayList<>(snapshots.size());
+        for (StructureIndexCache.ItemStackSnapshot snapshot : snapshots) {
+            if (ItemStackSnapshotHelper.isEmptySnapshot(snapshot)) {
+                continue;
+            }
+            StructureIndexCache.ItemStackSnapshot copy = new StructureIndexCache.ItemStackSnapshot();
+            copy.itemId = snapshot.itemId != null ? snapshot.itemId : "";
+            copy.stackTag = snapshot.stackTag != null ? snapshot.stackTag : "";
+            copies.add(copy);
+        }
+        return copies;
+    }
+
     @SafeVarargs
     private static List<String> mergeOrdered(Set<String>... sets) {
         LinkedHashSet<String> result = new LinkedHashSet<>();
@@ -878,8 +912,10 @@ public final class StructureIndexExporter {
 
     private static void addLootBinding(ResourceLocation templateId, String blockId, CompoundTag blockEntity, TemplateScanResult result) {
         String lootTable = findLootTable(blockEntity);
-        LinkedHashSet<String> storedItems = StoredItemNbtReader.readStoredItems(blockEntity);
-        if (lootTable.isBlank() && storedItems.isEmpty()) {
+        List<StructureIndexCache.ItemStackSnapshot> storedItemStacks = StoredItemNbtReader.readStoredItemSnapshots(blockEntity, null);
+        LinkedHashSet<String> storedItems = new LinkedHashSet<>();
+        mergeSnapshotItemIds(storedItems, storedItemStacks);
+        if (lootTable.isBlank() && storedItems.isEmpty() && storedItemStacks.isEmpty()) {
             return;
         }
         StructureIndexCache.LootBinding binding = new StructureIndexCache.LootBinding();
@@ -887,6 +923,7 @@ public final class StructureIndexExporter {
         binding.blockId = blockId;
         binding.lootTableId = lootTable;
         binding.storedItemIds = new ArrayList<>(storedItems);
+        binding.storedItemStacks = copyItemStackSnapshots(storedItemStacks);
         binding.itemIds = new ArrayList<>(storedItems);
         if (SUSPICIOUS_BLOCKS.contains(blockId)) {
             result.suspiciousBlocks.add(binding);

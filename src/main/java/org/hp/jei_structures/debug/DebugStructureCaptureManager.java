@@ -30,6 +30,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import org.hp.jei_structures.JeiStructures;
+import org.hp.jei_structures.data.ItemStackSnapshotHelper;
 import org.hp.jei_structures.data.LootTableItemResolver;
 import org.hp.jei_structures.data.StoredItemNbtReader;
 import org.hp.jei_structures.data.StructureBindingPaths;
@@ -281,7 +282,7 @@ public final class DebugStructureCaptureManager {
             Files.createDirectories(this.structureToMobsRoot);
             Files.createDirectories(this.structureLootBindingsRoot);
             Files.createDirectories(this.outputRoot);
-            this.lootResolver = new LootTableItemResolver(server.getResourceManager(), server.registryAccess().registryOrThrow(Registries.ITEM));
+            this.lootResolver = new LootTableItemResolver(server.getResourceManager(), server.registryAccess().registryOrThrow(Registries.ITEM), server.registryAccess());
             this.cooldownTicks = 0;
             DebugCaptureOptimizationGuard.enable(this.playerId);
             DebugStructureCheckConcurrency.enable();
@@ -978,7 +979,14 @@ public final class DebugStructureCaptureManager {
                 }
                 var nbt = blockEntity.saveWithId(currentAttempt.level.registryAccess());
                 String lootTableId = DebugStructureCaptureScanning.readLootTable(nbt);
-                LinkedHashSet<String> storedItems = StoredItemNbtReader.readStoredItems(nbt);
+                List<StructureIndexCache.ItemStackSnapshot> storedItemStacks = StoredItemNbtReader.readStoredItemSnapshots(nbt, currentAttempt.level.registryAccess());
+                LinkedHashSet<String> storedItems = new LinkedHashSet<>();
+                for (StructureIndexCache.ItemStackSnapshot snapshot : storedItemStacks) {
+                    String itemId = ItemStackSnapshotHelper.snapshotItemId(snapshot);
+                    if (itemId != null && !itemId.isBlank()) {
+                        storedItems.add(itemId);
+                    }
+                }
                 StructureIndexCache.LootTableDetail detail = null;
                 LinkedHashSet<String> lootItems = new LinkedHashSet<>();
                 if (!lootTableId.isBlank()) {
@@ -997,10 +1005,10 @@ public final class DebugStructureCaptureManager {
                         }
                     }
                 }
-                if (storedItems.isEmpty() && lootItems.isEmpty() && detail == null) {
+                if (storedItems.isEmpty() && storedItemStacks.isEmpty() && lootItems.isEmpty() && detail == null) {
                     continue;
                 }
-                currentAttempt.aggregate.recordLoot(blockId.toString(), storedItems, lootItems, detail);
+                currentAttempt.aggregate.recordLoot(blockId.toString(), storedItems, storedItemStacks, lootItems, detail);
             }
             currentAttempt.successful = true;
         }
@@ -1400,13 +1408,18 @@ public final class DebugStructureCaptureManager {
             this.structureType = structureType != null ? structureType : "";
         }
 
-        private void recordLoot(String blockId, Set<String> storedItems, Set<String> lootItems, StructureIndexCache.LootTableDetail detail) {
+        private void recordLoot(String blockId, Set<String> storedItems, List<StructureIndexCache.ItemStackSnapshot> storedItemStacks, Set<String> lootItems, StructureIndexCache.LootTableDetail detail) {
             if (blockId == null || blockId.isBlank()) {
                 return;
             }
             LootBindingAggregate aggregate = lootBindings.computeIfAbsent(blockId, LootBindingAggregate::new);
             if (storedItems != null) {
                 aggregate.storedItems.addAll(storedItems);
+            }
+            if (storedItemStacks != null) {
+                for (StructureIndexCache.ItemStackSnapshot snapshot : storedItemStacks) {
+                    aggregate.addStoredItemStack(snapshot);
+                }
             }
             if (lootItems != null) {
                 aggregate.itemIds.addAll(lootItems);
@@ -1452,6 +1465,7 @@ public final class DebugStructureCaptureManager {
     private static final class LootBindingAggregate {
         private final String blockId;
         private final LinkedHashSet<String> storedItems = new LinkedHashSet<>();
+        private final LinkedHashMap<String, StructureIndexCache.ItemStackSnapshot> storedItemStacks = new LinkedHashMap<>();
         private final LinkedHashSet<String> itemIds = new LinkedHashSet<>();
         private final LinkedHashMap<String, StructureIndexCache.LootTableDetail> lootTables = new LinkedHashMap<>();
 
@@ -1471,6 +1485,23 @@ public final class DebugStructureCaptureManager {
             existing.entries.addAll(detail.entries);
         }
 
+        private void addStoredItemStack(StructureIndexCache.ItemStackSnapshot snapshot) {
+            if (ItemStackSnapshotHelper.isEmptySnapshot(snapshot)) {
+                return;
+            }
+            String key = (snapshot.itemId != null ? snapshot.itemId : "") + "|" + (snapshot.stackTag != null ? snapshot.stackTag : "");
+            if (storedItemStacks.containsKey(key)) {
+                return;
+            }
+            StructureIndexCache.ItemStackSnapshot copy = new StructureIndexCache.ItemStackSnapshot();
+            copy.itemId = snapshot.itemId != null ? snapshot.itemId : "";
+            copy.stackTag = snapshot.stackTag != null ? snapshot.stackTag : "";
+            storedItemStacks.put(key, copy);
+            if (!copy.itemId.isBlank()) {
+                storedItems.add(copy.itemId);
+            }
+        }
+
         private JsonObject toJson(String structureId) {
             JsonObject json = new JsonObject();
             json.addProperty("structure_id", structureId);
@@ -1485,6 +1516,7 @@ public final class DebugStructureCaptureManager {
                 for (StructureIndexCache.LootItemEntry entry : detail.entries) {
                     JsonObject entryJson = new JsonObject();
                     entryJson.addProperty("item_id", entry.itemId);
+                    entryJson.addProperty("item_stack_tag", entry.itemStackTag);
                     entryJson.addProperty("weight", entry.weight);
                     entryJson.addProperty("quality", entry.quality);
                     entryJson.addProperty("rolls_text", entry.rollsText);
@@ -1503,6 +1535,14 @@ public final class DebugStructureCaptureManager {
             JsonArray storedItemsArray = new JsonArray();
             storedItems.stream().sorted(String.CASE_INSENSITIVE_ORDER).forEach(storedItemsArray::add);
             json.add("stored_items", storedItemsArray);
+            JsonArray itemStacksArray = new JsonArray();
+            for (StructureIndexCache.ItemStackSnapshot snapshot : storedItemStacks.values()) {
+                JsonObject stackJson = new JsonObject();
+                stackJson.addProperty("item_id", snapshot.itemId != null ? snapshot.itemId : "");
+                stackJson.addProperty("stack_tag", snapshot.stackTag != null ? snapshot.stackTag : "");
+                itemStacksArray.add(stackJson);
+            }
+            json.add("item_stacks", itemStacksArray);
             JsonArray itemsArray = new JsonArray();
             itemIds.stream().sorted(String.CASE_INSENSITIVE_ORDER).forEach(itemsArray::add);
             json.add("items", itemsArray);
