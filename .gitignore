@@ -120,3 +120,4 @@ runs/
 !gradle-wrapper.jar
 src/main/resources/test/
 .eclipse/
+.vscode/
