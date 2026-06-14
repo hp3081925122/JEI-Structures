@@ -9,6 +9,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.hp.jei_structures.JeiStructures;
+import org.hp.jei_structures.data.ItemStackSnapshotHelper;
 import org.hp.jei_structures.data.StructureIndexCache;
 
 import java.util.ArrayList;
@@ -495,6 +496,7 @@ public final class StructureRecipe {
             copy.blockId = valueOrEmpty(binding.blockId);
             copy.lootTableId = valueOrEmpty(binding.lootTableId);
             copy.storedItemIds = copyStrings(binding.storedItemIds);
+            copy.storedItemStacks = copyItemStackSnapshots(binding.storedItemStacks);
             copy.itemIds = copyStrings(binding.itemIds);
             copy.lootTables = copyLootTableDetails(binding.lootTables);
             copies.add(copy);
@@ -530,6 +532,7 @@ public final class StructureRecipe {
             }
             StructureIndexCache.LootItemEntry copy = new StructureIndexCache.LootItemEntry();
             copy.itemId = valueOrEmpty(source.itemId);
+            copy.itemStackTag = valueOrEmpty(source.itemStackTag);
             copy.weight = source.weight;
             copy.quality = source.quality;
             copy.rollsText = valueOrEmpty(source.rollsText);
@@ -538,6 +541,23 @@ public final class StructureRecipe {
             copy.countText = valueOrEmpty(source.countText);
             copy.chanceNotes = copyLootTextEntries(source.chanceNotes);
             copy.countNotes = copyLootTextEntries(source.countNotes);
+            copies.add(copy);
+        }
+        return copies;
+    }
+
+    private static List<StructureIndexCache.ItemStackSnapshot> copyItemStackSnapshots(List<StructureIndexCache.ItemStackSnapshot> snapshots) {
+        if (snapshots == null || snapshots.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<StructureIndexCache.ItemStackSnapshot> copies = new ArrayList<>(snapshots.size());
+        for (StructureIndexCache.ItemStackSnapshot source : snapshots) {
+            if (source == null) {
+                continue;
+            }
+            StructureIndexCache.ItemStackSnapshot copy = new StructureIndexCache.ItemStackSnapshot();
+            copy.itemId = valueOrEmpty(source.itemId);
+            copy.stackTag = valueOrEmpty(source.stackTag);
             copies.add(copy);
         }
         return copies;
@@ -694,16 +714,17 @@ public final class StructureRecipe {
         boolean first = true;
         for (StoredItemsGroup group : groups) {
             List<SlotDisplay> slots = new ArrayList<>();
-            for (String itemId : group.itemIds()) {
-                ItemStack stack = toItem(itemId);
+            for (StructureIndexCache.ItemStackSnapshot snapshot : group.itemStacks()) {
+                ItemStack stack = toSnapshotItem(snapshot);
                 if (stack.isEmpty()) {
                     continue;
                 }
                 String slotName = nextSlotName("stored_item", slotCounter);
                 slots.add(SlotDisplay.item(RecipeIngredientRole.OUTPUT, stack, slotName));
-                tooltipMap.put(slotName, List.of(
-                        Component.translatable("jei_structures.tooltip.block_id", group.blockId()).withStyle(ChatFormatting.DARK_GRAY)
-                ));
+                List<Component> tooltip = new ArrayList<>();
+                tooltip.add(Component.translatable("jei_structures.tooltip.block_id", group.blockId()).withStyle(ChatFormatting.DARK_GRAY));
+                tooltip.addAll(buildSnapshotTooltip(snapshot));
+                tooltipMap.put(slotName, List.copyOf(tooltip));
             }
             if (slots.isEmpty()) {
                 continue;
@@ -732,7 +753,7 @@ public final class StructureRecipe {
                 }
                 List<SlotDisplay> slots = new ArrayList<>();
                 for (StructureIndexCache.LootItemEntry entry : detail.entries) {
-                    ItemStack stack = toItem(entry.itemId);
+                    ItemStack stack = toSnapshotItem(entry);
                     if (stack.isEmpty()) {
                         continue;
                     }
@@ -871,16 +892,16 @@ public final class StructureRecipe {
     }
 
     private List<StoredItemsGroup> buildStoredItemGroups() {
-        Map<String, LinkedHashSet<String>> grouped = new LinkedHashMap<>();
+        Map<String, LinkedHashMap<String, StructureIndexCache.ItemStackSnapshot>> grouped = new LinkedHashMap<>();
         addStoredItems(grouped, entry.containers);
         addStoredItems(grouped, entry.suspiciousBlocks);
         addStoredItems(grouped, entry.manualLootBindings);
         List<StoredItemsGroup> groups = new ArrayList<>();
-        for (Map.Entry<String, LinkedHashSet<String>> group : grouped.entrySet()) {
+        for (Map.Entry<String, LinkedHashMap<String, StructureIndexCache.ItemStackSnapshot>> group : grouped.entrySet()) {
             if (group.getValue().isEmpty()) {
                 continue;
             }
-            groups.add(new StoredItemsGroup(group.getKey(), new ArrayList<>(group.getValue())));
+            groups.add(new StoredItemsGroup(group.getKey(), new ArrayList<>(group.getValue().values())));
         }
         groups.sort(Comparator
                 .comparing((StoredItemsGroup group) -> StructureTextHelper.getBlockName(group.blockId()), String.CASE_INSENSITIVE_ORDER)
@@ -905,20 +926,22 @@ public final class StructureRecipe {
         return groups;
     }
 
-    private static void addStoredItems(Map<String, LinkedHashSet<String>> grouped, List<StructureIndexCache.LootBinding> bindings) {
+    private static void addStoredItems(Map<String, LinkedHashMap<String, StructureIndexCache.ItemStackSnapshot>> grouped, List<StructureIndexCache.LootBinding> bindings) {
         if (bindings == null) {
             return;
         }
         for (StructureIndexCache.LootBinding binding : bindings) {
-            if (binding == null || binding.storedItemIds == null || binding.storedItemIds.isEmpty()) {
+            if (binding == null || binding.storedItemStacks == null || binding.storedItemStacks.isEmpty()) {
                 continue;
             }
             String blockId = resolveBlockId(binding);
-            LinkedHashSet<String> items = grouped.computeIfAbsent(blockId, key -> new LinkedHashSet<>());
-            for (String itemId : binding.storedItemIds) {
-                if (itemId != null && !itemId.isBlank()) {
-                    items.add(itemId);
+            LinkedHashMap<String, StructureIndexCache.ItemStackSnapshot> items = grouped.computeIfAbsent(blockId, key -> new LinkedHashMap<>());
+            for (StructureIndexCache.ItemStackSnapshot snapshot : binding.storedItemStacks) {
+                if (snapshot == null) {
+                    continue;
                 }
+                String key = valueOrEmpty(snapshot.itemId) + "|" + valueOrEmpty(snapshot.stackTag);
+                items.putIfAbsent(key, snapshotCopy(snapshot));
             }
         }
     }
@@ -969,6 +992,9 @@ public final class StructureRecipe {
         lines.add(Component.translatable("jei_structures.tooltip.loot_bonus_rolls", valueOrUnknown(entry.bonusRollsText)).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("jei_structures.tooltip.loot_chance", notesText(entry.chanceNotes, entry.chanceText)).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("jei_structures.tooltip.loot_count", notesText(entry.countNotes, entry.countText)).withStyle(ChatFormatting.GRAY));
+        if (entry.itemStackTag != null && !entry.itemStackTag.isBlank()) {
+            lines.add(Component.translatable("jei_structures.tooltip.item_nbt").withStyle(ChatFormatting.DARK_GRAY));
+        }
         return List.copyOf(lines);
     }
 
@@ -1405,7 +1431,46 @@ public final class StructureRecipe {
     private record GenerationBiomeDisplay(String biomeId, List<String> dimensionIds, List<String> sourceSelectors) {
     }
 
-    private record StoredItemsGroup(String blockId, List<String> itemIds) {
+    private static ItemStack toSnapshotItem(StructureIndexCache.ItemStackSnapshot snapshot) {
+        ItemStack stack = ItemStackSnapshotHelper.parseSnapshot(snapshot);
+        if (stack.isEmpty()) {
+            stack = ItemStackSnapshotHelper.createFallbackStack(ItemStackSnapshotHelper.snapshotItemId(snapshot));
+        }
+        return stack;
+    }
+
+    private static ItemStack toSnapshotItem(StructureIndexCache.LootItemEntry entry) {
+        if (entry == null) {
+            return ItemStack.EMPTY;
+        }
+        StructureIndexCache.ItemStackSnapshot snapshot = new StructureIndexCache.ItemStackSnapshot();
+        snapshot.itemId = valueOrEmpty(entry.itemId);
+        snapshot.stackTag = valueOrEmpty(entry.itemStackTag);
+        return toSnapshotItem(snapshot);
+    }
+
+    private static StructureIndexCache.ItemStackSnapshot snapshotCopy(StructureIndexCache.ItemStackSnapshot source) {
+        StructureIndexCache.ItemStackSnapshot copy = new StructureIndexCache.ItemStackSnapshot();
+        copy.itemId = valueOrEmpty(source.itemId);
+        copy.stackTag = valueOrEmpty(source.stackTag);
+        return copy;
+    }
+
+    private List<Component> buildSnapshotTooltip(StructureIndexCache.ItemStackSnapshot snapshot) {
+        List<Component> lines = new ArrayList<>();
+        if (snapshot == null) {
+            return lines;
+        }
+        if (snapshot.itemId != null && !snapshot.itemId.isBlank()) {
+            lines.add(Component.translatable("jei_structures.tooltip.item_id", snapshot.itemId).withStyle(ChatFormatting.GRAY));
+        }
+        if (snapshot.stackTag != null && !snapshot.stackTag.isBlank()) {
+            lines.add(Component.translatable("jei_structures.tooltip.item_nbt").withStyle(ChatFormatting.DARK_GRAY));
+        }
+        return List.copyOf(lines);
+    }
+
+    private record StoredItemsGroup(String blockId, List<StructureIndexCache.ItemStackSnapshot> itemStacks) {
     }
 
     private record BlockLootGroup(String blockId, List<StructureIndexCache.LootTableDetail> lootTables) {

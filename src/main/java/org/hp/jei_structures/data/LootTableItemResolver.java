@@ -11,6 +11,7 @@ import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.hp.jei_structures.JeiStructures;
 
@@ -146,7 +147,7 @@ public final class LootTableItemResolver {
         if ("minecraft:item".equals(type)) {
             ResourceLocation itemId = getResourceLocation(object, "name");
             if (itemId != null && ForgeRegistries.ITEMS.containsKey(itemId)) {
-                output.add(createLootItemEntry(itemId.toString(), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
+                output.add(createLootItemEntry(createBaseStack(itemId), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -159,7 +160,7 @@ public final class LootTableItemResolver {
             List<String> tagItems = expandTag(tagId);
             List<StructureIndexCache.LootTextEntry> tagChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.tag_expansion", tagId.toString())));
             for (String itemId : tagItems) {
-                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes)));
+                output.add(createLootItemEntry(ItemStackSnapshotHelper.createFallbackStack(itemId), weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
             return;
         }
@@ -170,8 +171,18 @@ public final class LootTableItemResolver {
                 return;
             }
             List<StructureIndexCache.LootTextEntry> childChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.nested_loot_table", childLootTable.toString())));
-            for (String itemId : resolveLootItems(childLootTable)) {
-                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, childChanceNotes, finalizeCountNotes(mergedCountNotes)));
+            StructureIndexCache.LootTableDetail childDetail = resolveLootTableDetail(childLootTable);
+            if (childDetail != null && childDetail.entries != null && !childDetail.entries.isEmpty()) {
+                for (StructureIndexCache.LootItemEntry childEntry : childDetail.entries) {
+                    if (childEntry == null || childEntry.itemId == null || childEntry.itemId.isBlank()) {
+                        continue;
+                    }
+                    output.add(createLootItemEntry(restoreStack(childEntry), weight, quality, rollsText, bonusRollsText, childChanceNotes, finalizeCountNotes(mergedCountNotes)));
+                }
+            } else {
+                for (String itemId : resolveLootItems(childLootTable)) {
+                    output.add(createLootItemEntry(ItemStackSnapshotHelper.createFallbackStack(itemId), weight, quality, rollsText, bonusRollsText, childChanceNotes, finalizeCountNotes(mergedCountNotes)));
+                }
             }
             return;
         }
@@ -232,9 +243,11 @@ public final class LootTableItemResolver {
         return Math.max(getInt(object, "weight", 1), 1);
     }
 
-    private StructureIndexCache.LootItemEntry createLootItemEntry(String itemId, int weight, int quality, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> chanceNotes, List<StructureIndexCache.LootTextEntry> countNotes) {
+    private StructureIndexCache.LootItemEntry createLootItemEntry(ItemStack stack, int weight, int quality, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> chanceNotes, List<StructureIndexCache.LootTextEntry> countNotes) {
         StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
-        entry.itemId = itemId;
+        StructureIndexCache.ItemStackSnapshot snapshot = ItemStackSnapshotHelper.createSnapshot(stack);
+        entry.itemId = snapshot != null ? ItemStackSnapshotHelper.snapshotItemId(snapshot) : "";
+        entry.itemStackTag = snapshot != null && snapshot.stackTag != null ? snapshot.stackTag : "";
         entry.weight = weight;
         entry.quality = quality;
         entry.rollsText = fallbackText(rollsText, "1");
@@ -244,6 +257,24 @@ public final class LootTableItemResolver {
         entry.chanceText = notesToEnglish(entry.chanceNotes, "Unknown relative weight");
         entry.countText = notesToEnglish(entry.countNotes, "Default count");
         return entry;
+    }
+
+    private ItemStack createBaseStack(ResourceLocation itemId) {
+        if (itemId == null || !ForgeRegistries.ITEMS.containsKey(itemId)) {
+            return ItemStack.EMPTY;
+        }
+        Item item = ForgeRegistries.ITEMS.getValue(itemId);
+        return item != null ? new ItemStack(item) : ItemStack.EMPTY;
+    }
+
+    private ItemStack restoreStack(StructureIndexCache.LootItemEntry entry) {
+        if (entry == null) {
+            return ItemStack.EMPTY;
+        }
+        StructureIndexCache.ItemStackSnapshot snapshot = new StructureIndexCache.ItemStackSnapshot();
+        snapshot.itemId = entry.itemId != null ? entry.itemId : "";
+        snapshot.stackTag = entry.itemStackTag != null ? entry.itemStackTag : "";
+        return ItemStackSnapshotHelper.parseSnapshot(snapshot);
     }
 
     private StructureIndexCache.LootTextEntry buildRelativeWeightNote(int weight, int totalWeight) {
@@ -399,6 +430,7 @@ public final class LootTableItemResolver {
             }
             StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
             entry.itemId = sourceEntry.itemId != null ? sourceEntry.itemId : "";
+            entry.itemStackTag = sourceEntry.itemStackTag != null ? sourceEntry.itemStackTag : "";
             entry.weight = sourceEntry.weight;
             entry.quality = sourceEntry.quality;
             entry.rollsText = sourceEntry.rollsText != null ? sourceEntry.rollsText : "";

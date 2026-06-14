@@ -10,7 +10,7 @@ import java.util.Map;
 
 public final class StructureIndexCache {
 
-    public static final int CURRENT_VERSION = 12;
+    public static final int CURRENT_VERSION = 13;
     public static final Gson GSON = new GsonBuilder()
             .disableHtmlEscaping()
             .setPrettyPrinting()
@@ -65,6 +65,7 @@ public final class StructureIndexCache {
         public String blockId = "";
         public String lootTableId = "";
         public List<String> storedItemIds = new ArrayList<>();
+        public List<ItemStackSnapshot> storedItemStacks = new ArrayList<>();
         public List<String> itemIds = new ArrayList<>();
         public List<LootTableDetail> lootTables = new ArrayList<>();
     }
@@ -82,6 +83,7 @@ public final class StructureIndexCache {
 
     public static final class LootItemEntry {
         public String itemId = "";
+        public String itemStackTag = "";
         public int weight;
         public int quality;
         public String rollsText = "";
@@ -95,5 +97,10 @@ public final class StructureIndexCache {
     public static final class LootTextEntry {
         public String translationKey = "";
         public List<String> args = new ArrayList<>();
+    }
+
+    public static final class ItemStackSnapshot {
+        public String itemId = "";
+        public String stackTag = "";
     }
 }
