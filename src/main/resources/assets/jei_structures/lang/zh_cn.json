@@ -80,6 +80,8 @@
   "jei_structures.tooltip.loot_bonus_rolls": "额外抽取次数：%s",
   "jei_structures.tooltip.loot_chance": "概率说明：%s",
   "jei_structures.tooltip.loot_count": "数量说明：%s",
+  "jei_structures.tooltip.item_id": "物品ID：%s",
+  "jei_structures.tooltip.item_nbt": "包含NBT数据",
   "jei_structures.loot_entry.quality": "质量 %s",
   "jei_structures.loot_entry.rolls": "抽取 %s",
   "jei_structures.loot_entry.bonus_rolls": "额外抽取 %s",

@@ -80,6 +80,8 @@
   "jei_structures.tooltip.loot_bonus_rolls": "Bonus Rolls: %s",
   "jei_structures.tooltip.loot_chance": "Chance Notes: %s",
   "jei_structures.tooltip.loot_count": "Count Notes: %s",
+  "jei_structures.tooltip.item_id": "Item ID: %s",
+  "jei_structures.tooltip.item_nbt": "Contains NBT data",
   "jei_structures.loot_entry.quality": "Quality %s",
   "jei_structures.loot_entry.rolls": "Rolls %s",
   "jei_structures.loot_entry.bonus_rolls": "Bonus Rolls %s",

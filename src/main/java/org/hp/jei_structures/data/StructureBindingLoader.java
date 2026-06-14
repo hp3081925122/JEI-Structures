@@ -160,10 +160,11 @@ public final class StructureBindingLoader {
         binding.blockId = getString(json, "block_id");
         binding.lootTables = readStringArray(json.get("loot_tables"));
         binding.items = readStringArray(json.get("items"));
+        binding.itemStacks = readItemStackSnapshots(json.get("item_stacks"));
         if (binding.structureId.isBlank()) {
             return null;
         }
-        if (binding.lootTables.isEmpty() && binding.items.isEmpty()) {
+        if (binding.lootTables.isEmpty() && binding.items.isEmpty() && binding.itemStacks.isEmpty()) {
             return null;
         }
         return binding;
@@ -274,6 +275,26 @@ public final class StructureBindingLoader {
             }
         }
         return List.copyOf(values);
+    }
+
+    private static List<StructureIndexCache.ItemStackSnapshot> readItemStackSnapshots(JsonElement element) {
+        if (element == null || element.isJsonNull() || !element.isJsonArray()) {
+            return List.of();
+        }
+        List<StructureIndexCache.ItemStackSnapshot> result = new ArrayList<>();
+        for (JsonElement child : element.getAsJsonArray()) {
+            if (child == null || !child.isJsonObject()) {
+                continue;
+            }
+            JsonObject json = child.getAsJsonObject();
+            StructureIndexCache.ItemStackSnapshot snapshot = new StructureIndexCache.ItemStackSnapshot();
+            snapshot.itemId = getString(json, "item_id");
+            snapshot.stackTag = getString(json, "stack_tag");
+            if (!ItemStackSnapshotHelper.isEmptySnapshot(snapshot)) {
+                result.add(snapshot);
+            }
+        }
+        return List.copyOf(result);
     }
 
     private static String getString(JsonObject object, String key) {
