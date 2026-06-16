@@ -120,3 +120,4 @@ runs/
 src/main/resources/test/
 bin/
 .eclipse/
+.vscode/
