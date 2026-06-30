@@ -61,7 +61,6 @@ public final class DebugStructureCaptureManager {
     private static final int DEFAULT_LOCATE_RADIUS = 128;
     private static final int END_OUTER_ISLAND_OFFSET_X = 1200;
     private static final int BASE_COOLDOWN_TICKS = 5;
-    private static final int BASE_MOB_WAIT_TICKS = 20;
     private static final int PRELOAD_NEXT_STRUCTURE_CHUNKS_PER_TICK = 1;
     private static final int MAX_CONCURRENT_LOCATE_REQUESTS = 3;
     private static final long LOCATE_REQUEST_TIMEOUT_MILLIS = 20_000L;
@@ -539,7 +538,7 @@ public final class DebugStructureCaptureManager {
                     currentAttempt.aggregate.getLootItemCount(),
                     speedMultiplier
             );
-            currentAttempt.mobWaitTicks = BASE_MOB_WAIT_TICKS;
+            currentAttempt.mobWaitTicks = JeiStructuresConfig.captureMobWaitTicks();
             enterPhase(Phase.WAIT_MOBS);
             return false;
         }
