@@ -7,6 +7,7 @@ public final class JeiStructuresConfig {
     public static final ModConfigSpec COMMON_SPEC;
     private static final ModConfigSpec.BooleanValue SILENT_CAPTURE_TELEPORT;
     private static final ModConfigSpec.IntValue CAPTURE_CHUNK_LOADS_PER_TICK;
+    private static final ModConfigSpec.IntValue CAPTURE_MOB_WAIT_TICKS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -17,6 +18,12 @@ public final class JeiStructuresConfig {
         CAPTURE_CHUNK_LOADS_PER_TICK = builder
                 .comment("Number of structure chunks to load per tick during debug structure capture.")
                 .defineInRange("chunkLoadsPerTick", 8, 1, 64);
+        CAPTURE_MOB_WAIT_TICKS = builder
+                .comment(
+                        "Ticks to wait before sampling mobs after each structure is prepared.",
+                        "每个结构准备完成后，采样生物前等待的 tick 数。"
+                )
+                .defineInRange("mobWaitTicks", 10, 0, 200);
         builder.pop();
         COMMON_SPEC = builder.build();
     }
@@ -30,5 +37,9 @@ public final class JeiStructuresConfig {
 
     public static int captureChunkLoadsPerTick() {
         return CAPTURE_CHUNK_LOADS_PER_TICK.get();
+    }
+
+    public static int captureMobWaitTicks() {
+        return CAPTURE_MOB_WAIT_TICKS.get();
     }
 }
