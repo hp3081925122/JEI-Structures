@@ -91,7 +91,7 @@ public final class StructureIndexExporter {
         StructureIndexCache cache = new StructureIndexCache();
         cache.generatedAt = Instant.now().toString();
 
-        LootTableItemResolver lootResolver = new LootTableItemResolver(resourceManager, itemRegistry);
+        LootTableItemResolver lootResolver = new LootTableItemResolver(resourceManager, itemRegistry, server.overworld());
         List<StructureIndexCache.StructureEntry> entries = new ArrayList<>();
         int skippedCount = 0;
 
