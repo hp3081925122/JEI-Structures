@@ -71,7 +71,7 @@ public final class StructureRecipe {
     }
 
     private StructureRecipe(StructureIndexCache.StructureEntry entry, List<ContentBlock> pageBlocks, Map<String, List<Component>> tooltips, int pageIndex, int pageCount) {
-        this.entry = copyEntry(entry);
+        this.entry = entry != null ? entry : new StructureIndexCache.StructureEntry();
         this.pageIndex = Math.max(pageIndex, 1);
         this.pageCount = Math.max(pageCount, 1);
         this.id = new ResourceLocation(JeiStructures.MODID, this.pageCount > 1 ? sanitize(this.entry.structureId) + "_page_" + this.pageIndex : sanitize(this.entry.structureId));
@@ -108,6 +108,10 @@ public final class StructureRecipe {
 
     public StructureIndexCache.StructureEntry getEntry() {
         return copyEntry(entry);
+    }
+
+    public String getStructureId() {
+        return entry.structureId;
     }
 
     public Component getDisplayName() {

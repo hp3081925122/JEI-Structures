@@ -85,7 +85,7 @@ public final class JeiStructuresPlugin implements IModPlugin {
             return false;
         }
         List<StructureRecipe> matchedRecipes = getSharedRecipes().stream()
-                .filter(recipe -> structureId.equals(recipe.getEntry().structureId))
+                .filter(recipe -> structureId.equals(recipe.getStructureId()))
                 .toList();
         if (matchedRecipes.isEmpty()) {
             return false;

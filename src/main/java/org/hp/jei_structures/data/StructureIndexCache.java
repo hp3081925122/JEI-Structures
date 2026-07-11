@@ -13,7 +13,6 @@ public final class StructureIndexCache {
     public static final int CURRENT_VERSION = 13;
     public static final Gson GSON = new GsonBuilder()
             .disableHtmlEscaping()
-            .setPrettyPrinting()
             .create();
 
     public int version = CURRENT_VERSION;
