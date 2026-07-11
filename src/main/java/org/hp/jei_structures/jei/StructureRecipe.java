@@ -60,22 +60,14 @@ public final class StructureRecipe {
     private final ResourceLocation id;
     private final StructureIndexCache.StructureEntry entry;
     private final Component displayName;
-    private final List<ContentBlock> contentBlocks;
-    private final Map<String, List<Component>> slotTooltips;
-    private final ItemStack iconStack;
-    private final List<ItemStack> lookupInputs;
-    private final List<ItemStack> lookupOutputs;
+    private volatile DisplayData displayData;
+    private volatile ItemStack iconStack;
+    private volatile List<ItemStack> lookupInputs;
 
     public StructureRecipe(StructureIndexCache.StructureEntry entry) {
-        this.entry = copyEntry(entry);
+        this.entry = entry != null ? entry : new StructureIndexCache.StructureEntry();
         this.id = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, sanitize(this.entry.structureId));
         this.displayName = StructureTextHelper.getStructureComponent(this.entry.structureId);
-        LinkedHashMap<String, List<Component>> tooltipMap = new LinkedHashMap<>();
-        this.contentBlocks = List.copyOf(buildContentBlocks(tooltipMap));
-        this.slotTooltips = Map.copyOf(tooltipMap);
-        this.iconStack = resolveIconStack();
-        this.lookupInputs = buildLookupInputs();
-        this.lookupOutputs = List.copyOf(lookupInputs);
     }
 
     public ResourceLocation getId() {
@@ -86,31 +78,77 @@ public final class StructureRecipe {
         return copyEntry(entry);
     }
 
+    public String getStructureId() {
+        return entry.structureId;
+    }
+
     public Component getDisplayName() {
         return displayName;
     }
 
     public ItemStack getIconStack() {
-        return iconStack.copy();
+        ItemStack snapshot = iconStack;
+        if (snapshot == null) {
+            synchronized (this) {
+                snapshot = iconStack;
+                if (snapshot == null) {
+                    snapshot = resolveIconStack();
+                    iconStack = snapshot;
+                }
+            }
+        }
+        return snapshot.copy();
     }
 
     public List<ItemStack> getLookupInputs() {
-        return copyStacks(lookupInputs);
+        return copyStacks(getOrCreateLookupInputs());
     }
 
     public List<ItemStack> getLookupOutputs() {
-        return copyStacks(lookupOutputs);
+        return copyStacks(getOrCreateLookupInputs());
     }
 
     public List<ContentBlock> getContentBlocks() {
-        return List.copyOf(contentBlocks);
+        return getOrCreateDisplayData().contentBlocks;
     }
 
     public List<Component> getSlotTooltips(String slotName) {
         if (slotName == null || slotName.isBlank()) {
             return List.of();
         }
-        return slotTooltips.getOrDefault(slotName, List.of());
+        return getOrCreateDisplayData().slotTooltips.getOrDefault(slotName, List.of());
+    }
+
+    private DisplayData getOrCreateDisplayData() {
+        DisplayData snapshot = displayData;
+        if (snapshot == null) {
+            synchronized (this) {
+                snapshot = displayData;
+                if (snapshot == null) {
+                    LinkedHashMap<String, List<Component>> tooltipMap = new LinkedHashMap<>();
+                    snapshot = new DisplayData(List.copyOf(buildContentBlocks(tooltipMap)), Map.copyOf(tooltipMap));
+                    displayData = snapshot;
+                }
+            }
+        }
+        return snapshot;
+    }
+
+    private List<ItemStack> getOrCreateLookupInputs() {
+        List<ItemStack> snapshot = lookupInputs;
+        if (snapshot == null) {
+            synchronized (this) {
+                snapshot = lookupInputs;
+                if (snapshot == null) {
+                    snapshot = List.copyOf(buildLookupInputs());
+                    lookupInputs = snapshot;
+                }
+            }
+        }
+        return snapshot;
+    }
+
+    private record DisplayData(List<ContentBlock> contentBlocks, Map<String, List<Component>> slotTooltips) {
     }
 
     public int getTitleHeight() {
@@ -242,6 +280,7 @@ public final class StructureRecipe {
     }
 
     public int getMergedContentHeight() {
+        List<ContentBlock> contentBlocks = getOrCreateDisplayData().contentBlocks;
         if (contentBlocks.isEmpty()) {
             return 0;
         }
@@ -970,27 +1009,33 @@ public final class StructureRecipe {
     }
 
     private ItemStack resolveIconStack() {
-        for (ContentBlock block : contentBlocks) {
-            for (SlotDisplay slot : block.slots()) {
-                if (slot.kind() == SlotKind.ITEM && slot.itemStack() != null && !slot.itemStack().isEmpty()) {
-                    return slot.itemStack().copy();
-                }
-            }
+        List<ItemStack> stacks = getOrCreateLookupInputs();
+        if (!stacks.isEmpty()) {
+            return stacks.get(0).copy();
         }
         return StructureRecipeCategory.createStructureBlockStack();
     }
 
     private List<ItemStack> buildLookupInputs() {
-        LinkedHashMap<Item, ItemStack> lookup = new LinkedHashMap<>();
-        for (ContentBlock block : contentBlocks) {
-            for (SlotDisplay slot : block.slots()) {
-                if (slot.kind() != SlotKind.ITEM || slot.itemStack() == null || slot.itemStack().isEmpty()) {
+        LinkedHashSet<String> itemIds = new LinkedHashSet<>();
+        itemIds.addAll(entry.allMobEggItemIds);
+        itemIds.addAll(entry.allLootItemIds);
+        itemIds.addAll(entry.specialDisplayBlocks);
+        for (List<StructureIndexCache.LootBinding> bindings : List.of(entry.containers, entry.suspiciousBlocks, entry.manualLootBindings)) {
+            for (StructureIndexCache.LootBinding binding : bindings) {
+                if (binding == null) {
                     continue;
                 }
-                lookup.putIfAbsent(slot.itemStack().getItem(), slot.itemStack().copy());
+                itemIds.addAll(binding.storedItemIds);
+                for (StructureIndexCache.ItemStackSnapshot snapshot : binding.storedItemStacks) {
+                    String itemId = ItemStackSnapshotHelper.snapshotItemId(snapshot);
+                    if (!itemId.isBlank()) {
+                        itemIds.add(itemId);
+                    }
+                }
             }
         }
-        return List.copyOf(lookup.values());
+        return toItems(new ArrayList<>(itemIds));
     }
 
     private static List<SlotDisplay> toPlainSlots(List<ItemStack> stacks, RecipeIngredientRole role, String slotPrefix, int[] slotCounter) {
