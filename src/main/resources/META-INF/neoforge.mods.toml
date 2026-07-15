@@ -12,6 +12,10 @@ description = '''${mod_description}'''
 [[mixins]]
 config = "jei_structures.mixins.json"
 
+[[mixins]]
+config = "jei_structures.emi.mixins.json"
+requiredMods = ["emi"]
+
 [[dependencies."${mod_id}"]]
 modId = "neoforge"
 mandatory = true
@@ -30,5 +34,12 @@ side = "BOTH"
 modId = "jei"
 mandatory = false
 versionRange = "${jei_version_range}"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies."${mod_id}"]]
+modId = "emi"
+type = "optional"
+versionRange = "${emi_version_range}"
 ordering = "AFTER"
 side = "CLIENT"

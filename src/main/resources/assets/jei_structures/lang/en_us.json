@@ -1,5 +1,6 @@
 {
   "jei_structures.category.structure_index": "Structure Index",
+  "emi.category.jei_structures.structure_index": "Structure Index",
   "jei_structures.toast.current_structure": "Current Structure: %s",
   "jei_structures.toast.open_jei_hint": "Press %s to open the JEI page",
   "jei_structures.toast.jei_unavailable": "JEI is not available, unable to open the structure page",

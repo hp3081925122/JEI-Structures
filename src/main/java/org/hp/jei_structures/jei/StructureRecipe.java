@@ -104,6 +104,10 @@ public final class StructureRecipe {
         return copyStacks(getOrCreateLookupInputs());
     }
 
+    List<ItemStack> getLookupInputsForIndex() {
+        return getOrCreateLookupInputs();
+    }
+
     public List<ItemStack> getLookupOutputs() {
         return copyStacks(getOrCreateLookupInputs());
     }
@@ -1035,7 +1039,14 @@ public final class StructureRecipe {
                 }
             }
         }
-        return toItems(new ArrayList<>(itemIds));
+        List<ItemStack> stacks = new ArrayList<>(itemIds.size());
+        for (String itemId : itemIds) {
+            ItemStack stack = toItem(itemId);
+            if (!stack.isEmpty()) {
+                stacks.add(stack);
+            }
+        }
+        return stacks;
     }
 
     private static List<SlotDisplay> toPlainSlots(List<ItemStack> stacks, RecipeIngredientRole role, String slotPrefix, int[] slotCounter) {

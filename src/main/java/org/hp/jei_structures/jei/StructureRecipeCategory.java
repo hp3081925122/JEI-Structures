@@ -4,6 +4,7 @@ import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
+import mezz.jei.api.gui.ingredient.IRecipeSlotDrawablesView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.helpers.IGuiHelper;
@@ -117,7 +118,12 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     @Override
     public void createRecipeExtras(mezz.jei.api.gui.widgets.IRecipeExtrasBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
-        List<IRecipeSlotDrawable> contentSlots = builder.getRecipeSlots().getSlots();
+        IRecipeSlotDrawablesView recipeSlots = builder.getRecipeSlots();
+        if (recipeSlots == null) {
+            JeiStructures.LOGGER.debug("Skipped JEI structure recipe extras because recipe slots are unavailable for builder {}", builder.getClass().getName());
+            return;
+        }
+        List<IRecipeSlotDrawable> contentSlots = recipeSlots.getSlots();
         StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT, contentSlots);
         builder.addSlottedWidget(widget, contentSlots);
         builder.addInputHandler(widget);
@@ -203,6 +209,22 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         return SCROLLBAR_EXTRA_WIDTH;
     }
 
+    static int getContentX() {
+        return CONTENT_X;
+    }
+
+    static int getContentY() {
+        return CONTENT_Y;
+    }
+
+    static int getContentWidth() {
+        return CONTENT_WIDTH;
+    }
+
+    static int getContentHeight() {
+        return CONTENT_HEIGHT;
+    }
+
     private static int getContentWidthWithoutScrollbar() {
         return CONTENT_WIDTH - getScrollbarWidth();
     }
@@ -270,7 +292,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         guiGraphics.drawString(font, text, centerX - width / 2, y + TITLE_CENTER_Y - font.lineHeight / 2, resolveTextColor(text, color), false);
     }
 
-    private static void drawFixedHeader(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
+    static void drawFixedHeader(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
         Font font = Minecraft.getInstance().font;
         int titleY = y - FIXED_TITLE_Y;
         drawCenteredString(guiGraphics, font, recipe.getDisplayName(), x + getContentRightEdge() / 2, titleY, 0xFF2A2A2A);
