@@ -134,6 +134,10 @@ public final class StructureRecipe {
         return copyStacks(lookupInputs);
     }
 
+    List<ItemStack> getLookupInputsForIndex() {
+        return lookupInputs;
+    }
+
     public List<ItemStack> getLookupOutputs() {
         return copyStacks(lookupOutputs);
     }
