@@ -3,6 +3,7 @@
   "minVersion": "0.8",
   "package": "org.hp.jei_structures.mixin",
   "compatibilityLevel": "JAVA_8",
+  "plugin": "org.hp.jei_structures.mixin.JeiStructuresMixinPlugin",
   "refmap": "jei_structures.refmap.json",
   "mixins": [
     "AsyncLocatorConfigDefaultMixin",
@@ -12,6 +13,7 @@
     "StructureCheckConcurrencyMixin"
   ],
   "client": [
+    "emi.RecipeScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

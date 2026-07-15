@@ -10,6 +10,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import org.hp.jei_structures.JeiStructures;
 
 import java.util.Collections;
 import java.util.Map;
@@ -88,7 +89,11 @@ public final class DebugStructureCheckConcurrency {
     public static Long2ObjectMap<Object2IntMap<Structure>> copyLoadedChunks(Long2ObjectMap<Object2IntMap<Structure>> source) {
         Long2ObjectOpenHashMap<Object2IntMap<Structure>> copy = new Long2ObjectOpenHashMap<>();
         if (source != null) {
-            copy.putAll(source);
+            try {
+                copy.putAll(source);
+            } catch (RuntimeException exception) {
+                JeiStructures.LOGGER.debug("Failed to copy StructureCheck loaded chunk cache; it will be rebuilt during debug capture", exception);
+            }
         }
         return Long2ObjectMaps.synchronize(copy);
     }
@@ -96,15 +101,31 @@ public final class DebugStructureCheckConcurrency {
     public static Map<Structure, Long2BooleanMap> copyFeatureChecks(Map<Structure, Long2BooleanMap> source) {
         Map<Structure, Long2BooleanMap> copy = createFeatureChecksMap();
         if (source != null) {
-            for (Map.Entry<Structure, Long2BooleanMap> entry : source.entrySet()) {
-                Long2BooleanOpenHashMap valueCopy = new Long2BooleanOpenHashMap();
-                if (entry.getValue() != null) {
-                    valueCopy.putAll(entry.getValue());
+            try {
+                for (Map.Entry<Structure, Long2BooleanMap> entry : source.entrySet()) {
+                    Long2BooleanMap valueCopy = copyFeatureCheckValue(entry.getKey(), entry.getValue());
+                    if (valueCopy != null) {
+                        copy.put(entry.getKey(), valueCopy);
+                    }
                 }
-                copy.put(entry.getKey(), Long2BooleanMaps.synchronize(valueCopy));
+            } catch (RuntimeException exception) {
+                JeiStructures.LOGGER.debug("Failed to copy StructureCheck feature cache; it will be rebuilt during debug capture", exception);
             }
         }
         return copy;
+    }
+
+    private static Long2BooleanMap copyFeatureCheckValue(Structure structure, Long2BooleanMap source) {
+        Long2BooleanOpenHashMap valueCopy = new Long2BooleanOpenHashMap();
+        if (source != null) {
+            try {
+                valueCopy.putAll(source);
+            } catch (RuntimeException exception) {
+                JeiStructures.LOGGER.debug("Skipped one StructureCheck feature cache entry while enabling debug capture concurrency: {}", structure, exception);
+                return null;
+            }
+        }
+        return Long2BooleanMaps.synchronize(valueCopy);
     }
 
     public static Map<Structure, Long2BooleanMap> createFeatureChecksMap() {

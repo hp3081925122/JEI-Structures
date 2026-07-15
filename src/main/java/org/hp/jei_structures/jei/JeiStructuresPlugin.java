@@ -9,11 +9,12 @@ import mezz.jei.api.registration.IAdvancedRegistration;
 import mezz.jei.api.registration.IModIngredientRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
-import mezz.jei.api.registration.IRecipeRegistration;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.fml.ModList;
 import org.hp.jei_structures.JeiStructures;
+import org.hp.jei_structures.compat.EmiStructureRecipeOpener;
 import org.hp.jei_structures.data.StructureIndexCache;
 import org.hp.jei_structures.data.StructureIndexCacheLoader;
 
@@ -25,6 +26,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.locks.LockSupport;
 
 @JeiPlugin
 public final class JeiStructuresPlugin implements IModPlugin {
@@ -32,6 +37,13 @@ public final class JeiStructuresPlugin implements IModPlugin {
     private static volatile CachedRecipes cachedRecipes;
     private static volatile IJeiRuntime runtime;
     private static volatile StructureRecipeCategory category;
+    private static volatile StructureRecipeLookupPlugin lookupPlugin;
+    private static final ExecutorService LOOKUP_WARMUP_EXECUTOR = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "JEI Structures Lookup Warmup");
+        thread.setDaemon(true);
+        thread.setPriority(Thread.MIN_PRIORITY);
+        return thread;
+    });
     private final ResourceLocation pluginId = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, "plugin");
 
     @Override
@@ -53,23 +65,25 @@ public final class JeiStructuresPlugin implements IModPlugin {
     }
 
     @Override
-    public void registerRecipes(IRecipeRegistration registration) {
-        registration.addRecipes(StructureRecipeCategory.TYPE, getSharedRecipes());
-    }
-
-    @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         registration.addRecipeCatalyst(StructureRecipeCategory.createStructureBlockStack(), StructureRecipeCategory.TYPE);
     }
 
     @Override
     public void registerAdvanced(IAdvancedRegistration registration) {
-        registration.addTypedRecipeManagerPlugin(StructureRecipeCategory.TYPE, new StructureRecipeLookupPlugin());
+        StructureRecipeLookupPlugin plugin = new StructureRecipeLookupPlugin();
+        lookupPlugin = plugin;
+        registration.addTypedRecipeManagerPlugin(StructureRecipeCategory.TYPE, plugin);
+        JeiStructures.LOGGER.debug("Registered lazy structure recipe lookup plugin with {} recipes", getSharedRecipes().size());
     }
 
     @Override
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
         runtime = jeiRuntime;
+        StructureRecipeLookupPlugin plugin = lookupPlugin;
+        if (plugin != null) {
+            plugin.prewarm();
+        }
     }
 
     @Override
@@ -78,17 +92,35 @@ public final class JeiStructuresPlugin implements IModPlugin {
     }
 
     public static boolean openStructureRecipe(String structureId) {
-        IJeiRuntime currentRuntime = runtime;
-        StructureRecipeCategory currentCategory = category;
-        if (currentRuntime == null || currentCategory == null || structureId == null || structureId.isBlank()) {
+        if (structureId == null || structureId.isBlank()) {
             return false;
         }
         List<StructureRecipe> matchedRecipes = getSharedRecipes().stream()
                 .filter(recipe -> structureId.equals(recipe.getStructureId()))
                 .toList();
         if (matchedRecipes.isEmpty()) {
+            JeiStructures.LOGGER.debug("Cannot open current structure recipe because it is not present in the client cache: {}", structureId);
             return false;
         }
+        if (ModList.get().isLoaded("emi") && EmiStructureRecipeOpener.open(matchedRecipes.get(0))) {
+            return true;
+        }
+        IJeiRuntime currentRuntime = runtime;
+        StructureRecipeCategory currentCategory = category;
+        if (currentRuntime == null || currentCategory == null) {
+            JeiStructures.LOGGER.debug(
+                    "Cannot open current structure recipe through JEI: runtimeAvailable={}, categoryAvailable={}, structureId={}",
+                    currentRuntime != null,
+                    currentCategory != null,
+                    structureId
+            );
+            return false;
+        }
+        JeiStructures.LOGGER.debug(
+                "Opening current structure recipe through JEI recipes GUI: structure={}, gui={}",
+                structureId,
+                currentRuntime.getRecipesGui().getClass().getName()
+        );
         currentRuntime.getRecipesGui().showRecipes(currentCategory, matchedRecipes, List.of());
         return true;
     }
@@ -145,8 +177,32 @@ public final class JeiStructuresPlugin implements IModPlugin {
     private static final class StructureRecipeLookupPlugin implements ISimpleRecipeManagerPlugin<StructureRecipe> {
 
         private volatile CachedLookup cachedLookup;
+        private volatile CompletableFuture<CachedLookup> warmingLookup;
 
         private StructureRecipeLookupPlugin() {
+        }
+
+        private void prewarm() {
+            List<StructureRecipe> recipes = getSharedRecipes();
+            synchronized (this) {
+                if (cachedLookup != null && cachedLookup.recipes == recipes) {
+                    return;
+                }
+                CompletableFuture<CachedLookup> currentWarmup = warmingLookup;
+                if (currentWarmup == null || currentWarmup.isDone()) {
+                    warmingLookup = CompletableFuture.supplyAsync(
+                            () -> new CachedLookup(recipes, indexRecipes(recipes)),
+                            LOOKUP_WARMUP_EXECUTOR
+                    ).whenComplete((lookup, exception) -> {
+                        if (exception == null) {
+                            cachedLookup = lookup;
+                            JeiStructures.LOGGER.debug("Finished background structure recipe lookup warmup with {} recipes", recipes.size());
+                        } else {
+                            JeiStructures.LOGGER.error("Failed to prewarm structure recipe lookup", exception);
+                        }
+                    });
+                }
+            }
         }
 
         @Override
@@ -173,7 +229,7 @@ public final class JeiStructuresPlugin implements IModPlugin {
 
         @Override
         public List<StructureRecipe> getAllRecipes() {
-            return getLookup().recipes;
+            return getSharedRecipes();
         }
 
         private List<StructureRecipe> getMatchedRecipes(ITypedIngredient<?> ingredient) {
@@ -190,6 +246,17 @@ public final class JeiStructuresPlugin implements IModPlugin {
             if (snapshot != null && snapshot.recipes == recipes) {
                 return snapshot;
             }
+            CompletableFuture<CachedLookup> warmup = warmingLookup;
+            if (warmup != null) {
+                try {
+                    snapshot = warmup.join();
+                    if (snapshot.recipes == recipes) {
+                        return snapshot;
+                    }
+                } catch (RuntimeException exception) {
+                    JeiStructures.LOGGER.error("Failed to wait for structure recipe lookup warmup", exception);
+                }
+            }
             synchronized (this) {
                 snapshot = cachedLookup;
                 if (snapshot == null || snapshot.recipes != recipes) {
@@ -201,9 +268,12 @@ public final class JeiStructuresPlugin implements IModPlugin {
 
         private static Map<Item, List<StructureRecipe>> indexRecipes(List<StructureRecipe> recipes) {
             Map<Item, Set<StructureRecipe>> deduplicatedIndex = new IdentityHashMap<>();
-            for (StructureRecipe recipe : recipes) {
-                addStacks(deduplicatedIndex, recipe.getLookupInputs(), recipe);
-                addStacks(deduplicatedIndex, recipe.getLookupOutputs(), recipe);
+            for (int index = 0; index < recipes.size(); index++) {
+                StructureRecipe recipe = recipes.get(index);
+                addStacks(deduplicatedIndex, recipe.getLookupInputsForIndex(), recipe);
+                if ((index + 1) % 32 == 0) {
+                    LockSupport.parkNanos(1_000_000L);
+                }
             }
             Map<Item, List<StructureRecipe>> index = new IdentityHashMap<>();
             for (Map.Entry<Item, Set<StructureRecipe>> entry : deduplicatedIndex.entrySet()) {

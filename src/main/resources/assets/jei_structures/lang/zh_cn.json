@@ -1,5 +1,6 @@
 {
   "jei_structures.category.structure_index": "结构索引",
+  "emi.category.jei_structures.structure_index": "结构索引",
   "jei_structures.toast.current_structure": "当前结构名字：%s",
   "jei_structures.toast.open_jei_hint": "按 %s 打开对应 JEI 界面",
   "jei_structures.toast.jei_unavailable": "JEI 当前不可用，无法打开结构页面",
