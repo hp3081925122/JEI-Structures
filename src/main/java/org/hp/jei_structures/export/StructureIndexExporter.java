@@ -38,6 +38,7 @@ import org.hp.jei_structures.data.StructureBlacklistLoader;
 import org.hp.jei_structures.data.StructureBindingData;
 import org.hp.jei_structures.data.StructureBindingLoader;
 import org.hp.jei_structures.data.StructureIndexCache;
+import org.hp.jei_structures.data.StructureIndexCacheLoader;
 import org.hp.jei_structures.data.StructureLootBinding;
 import org.hp.jei_structures.data.StructureIndexPaths;
 import org.hp.jei_structures.data.StructureSpecialInfoData;
@@ -50,10 +51,8 @@ import org.objectweb.asm.Opcodes;
 
 import java.io.InputStream;
 import java.io.Reader;
-import java.io.Writer;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -113,13 +112,14 @@ public final class StructureIndexExporter {
 
         entries.sort(Comparator.comparing(entry -> entry.structureId));
         cache.structures = entries;
+        cache.compactLootTables();
         JeiStructures.LOGGER.info("Structure scan completed. Exportable: {}, skipped: {}", entries.size(), skippedCount);
+        JeiStructures.LOGGER.info("Compacted structure loot table details. Unique tables: {}", cache.lootTableDetails.size());
 
-        Path path = StructureIndexPaths.getCachePath();
+        Path path = StructureIndexPaths.getBinaryCachePath();
         Files.createDirectories(path.getParent());
-        try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-            StructureIndexCache.GSON.toJson(cache, writer);
-        }
+        StructureIndexCacheLoader.writeExportedCache(cache);
+        Files.deleteIfExists(StructureIndexPaths.getJsonPath());
         JeiStructures.LOGGER.info("Structure index export completed. Output file: {}", path);
         return path;
     }

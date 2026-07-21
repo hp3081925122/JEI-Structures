@@ -9,8 +9,12 @@ public final class StructureIndexPaths {
     private StructureIndexPaths() {
     }
 
-    public static Path getCachePath() {
+    public static Path getJsonPath() {
         return FMLPaths.CONFIGDIR.get().resolve("jei_structures").resolve("structure_index.json");
+    }
+
+    public static Path getBinaryCachePath() {
+        return FMLPaths.CONFIGDIR.get().resolve("jei_structures").resolve("structure_index.cache");
     }
 }
 
