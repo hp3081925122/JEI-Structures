@@ -2,78 +2,87 @@ package org.hp.jei_structures.data;
 
 import org.hp.jei_structures.JeiStructures;
 
-import java.io.Reader;
-import java.nio.charset.StandardCharsets;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 public final class StructureIndexCacheLoader {
 
-    private static volatile CachedIndex cached;
+    private static final int BINARY_CACHE_FORMAT = 4;
+    private static volatile StructureIndexCache cached;
 
     private StructureIndexCacheLoader() {
     }
 
     public static StructureIndexCache load() {
-        Path path = StructureIndexPaths.getCachePath();
-        long lastModified = getLastModifiedTime(path);
-        CachedIndex snapshot = cached;
-        if (snapshot != null && snapshot.lastModified == lastModified) {
-            return snapshot.cache;
+        StructureIndexCache snapshot = cached;
+        if (snapshot != null) {
+            return snapshot;
         }
         synchronized (StructureIndexCacheLoader.class) {
-            snapshot = cached;
-            if (snapshot == null || snapshot.lastModified != lastModified) {
-                cached = new CachedIndex(loadFromDisk(path), lastModified);
+            if (cached == null) {
+                cached = loadBinaryCache();
             }
-            return cached.cache;
+            return cached;
         }
     }
 
-    public static void reload() {
-        synchronized (StructureIndexCacheLoader.class) {
-            Path path = StructureIndexPaths.getCachePath();
-            cached = new CachedIndex(loadFromDisk(path), getLastModifiedTime(path));
+    public static void writeExportedCache(StructureIndexCache cache) {
+        if (!cache.prepareRuntimeLootTables()) {
+            return;
         }
-    }
-
-    private static StructureIndexCache loadFromDisk(Path path) {
-        if (!Files.exists(path)) {
-            return new StructureIndexCache();
-        }
-        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            StructureIndexCache cache = StructureIndexCache.GSON.fromJson(reader, StructureIndexCache.class);
-            if (cache == null) {
-                return new StructureIndexCache();
-            }
-            if (cache.version != StructureIndexCache.CURRENT_VERSION) {
-                JeiStructures.LOGGER.warn(
-                        "Structure index cache version mismatch. Current: {}, Cache: {}, falling back to empty index: {}",
-                        StructureIndexCache.CURRENT_VERSION,
-                        cache.version,
-                        path
-                );
-                return new StructureIndexCache();
-            }
-            return cache;
-        } catch (Exception exception) {
-            JeiStructures.LOGGER.error("Failed to read structure index cache: {}", path, exception);
-            return new StructureIndexCache();
-        }
-    }
-
-    private static long getLastModifiedTime(Path path) {
+        Path binaryPath = StructureIndexPaths.getBinaryCachePath();
+        Path temporaryPath = binaryPath.resolveSibling(binaryPath.getFileName() + ".tmp");
         try {
-            if (!Files.exists(path)) {
-                return 0L;
+            Files.createDirectories(binaryPath.getParent());
+            try (ObjectOutputStream output = new ObjectOutputStream(new GZIPOutputStream(new BufferedOutputStream(Files.newOutputStream(temporaryPath))))) {
+                output.writeInt(BINARY_CACHE_FORMAT);
+                output.writeObject(cache);
             }
-            return Files.getLastModifiedTime(path).toMillis();
+            try {
+                Files.move(temporaryPath, binaryPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException exception) {
+                Files.move(temporaryPath, binaryPath, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (Exception exception) {
-            JeiStructures.LOGGER.error("Failed to read structure index cache timestamp: {}", path, exception);
-            return -1L;
+            JeiStructures.LOGGER.error("Failed to write structure index binary cache: {}", binaryPath, exception);
+            try {
+                Files.deleteIfExists(temporaryPath);
+            } catch (Exception ignored) {
+            }
         }
     }
 
-    private record CachedIndex(StructureIndexCache cache, long lastModified) {
+    private static StructureIndexCache loadBinaryCache() {
+        Path binaryPath = StructureIndexPaths.getBinaryCachePath();
+        if (!Files.exists(binaryPath)) {
+            JeiStructures.LOGGER.warn("Structure index binary cache is missing: {}", binaryPath);
+            return new StructureIndexCache();
+        }
+        long startedAt = System.nanoTime();
+        try (ObjectInputStream input = new ObjectInputStream(new GZIPInputStream(new BufferedInputStream(Files.newInputStream(binaryPath))))) {
+            if (input.readInt() != BINARY_CACHE_FORMAT) {
+                JeiStructures.LOGGER.warn("Structure index binary cache format mismatch: {}", binaryPath);
+                return new StructureIndexCache();
+            }
+            Object value = input.readObject();
+            if (value instanceof StructureIndexCache cache && cache.prepareRuntimeLootTables()) {
+                JeiStructures.LOGGER.info("Loaded {} structure index entries from binary cache in {} ms", cache.structures.size(), Duration.ofNanos(System.nanoTime() - startedAt).toMillis());
+                return cache;
+            }
+        } catch (Exception exception) {
+            JeiStructures.LOGGER.error("Failed to read structure index binary cache: {}", binaryPath, exception);
+            return new StructureIndexCache();
+        }
+        JeiStructures.LOGGER.warn("Structure index binary cache has an unsupported payload: {}", binaryPath);
+        return new StructureIndexCache();
     }
 }

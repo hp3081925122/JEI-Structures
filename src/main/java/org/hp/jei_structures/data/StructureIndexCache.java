@@ -4,11 +4,15 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import java.util.ArrayList;
+import java.io.Serializable;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public final class StructureIndexCache {
+public final class StructureIndexCache implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     public static final int CURRENT_VERSION = 14;
     public static final Gson GSON = new GsonBuilder()
@@ -18,8 +22,96 @@ public final class StructureIndexCache {
     public int version = CURRENT_VERSION;
     public String generatedAt = "";
     public List<StructureEntry> structures = new ArrayList<>();
+    public Map<String, LootTableDetail> lootTableDetails = new LinkedHashMap<>();
 
-    public static final class StructureEntry {
+    public boolean prepareRuntimeLootTables() {
+        if (version != CURRENT_VERSION) {
+            return false;
+        }
+        if (lootTableDetails == null) {
+            lootTableDetails = new LinkedHashMap<>();
+        }
+        for (StructureEntry structure : structures) {
+            if (structure == null) {
+                continue;
+            }
+            prepareRuntimeLootTables(structure.containers);
+            prepareRuntimeLootTables(structure.suspiciousBlocks);
+            prepareRuntimeLootTables(structure.manualLootBindings);
+        }
+        version = CURRENT_VERSION;
+        return true;
+    }
+
+    public void compactLootTables() {
+        lootTableDetails = new LinkedHashMap<>();
+        for (StructureEntry structure : structures) {
+            if (structure == null) {
+                continue;
+            }
+            compactLootTables(structure.containers);
+            compactLootTables(structure.suspiciousBlocks);
+            compactLootTables(structure.manualLootBindings);
+        }
+        version = CURRENT_VERSION;
+    }
+
+    private void prepareRuntimeLootTables(List<LootBinding> bindings) {
+        if (bindings == null) {
+            return;
+        }
+        for (LootBinding binding : bindings) {
+            if (binding == null) {
+                continue;
+            }
+            LinkedHashSet<String> ids = new LinkedHashSet<>(binding.lootTableIds);
+            if (binding.lootTables != null) {
+                for (LootTableDetail detail : binding.lootTables) {
+                    if (detail == null || detail.lootTableId == null || detail.lootTableId.isBlank()) {
+                        continue;
+                    }
+                    lootTableDetails.putIfAbsent(detail.lootTableId, detail);
+                    ids.add(detail.lootTableId);
+                }
+            }
+            List<LootTableDetail> resolved = new ArrayList<>();
+            for (String id : ids) {
+                LootTableDetail detail = lootTableDetails.get(id);
+                if (detail != null) {
+                    resolved.add(detail);
+                }
+            }
+            binding.lootTableIds = new ArrayList<>(ids);
+            binding.lootTables = resolved;
+        }
+    }
+
+    private void compactLootTables(List<LootBinding> bindings) {
+        if (bindings == null) {
+            return;
+        }
+        for (LootBinding binding : bindings) {
+            if (binding == null) {
+                continue;
+            }
+            LinkedHashSet<String> ids = new LinkedHashSet<>(binding.lootTableIds);
+            if (binding.lootTables != null) {
+                for (LootTableDetail detail : binding.lootTables) {
+                    if (detail == null || detail.lootTableId == null || detail.lootTableId.isBlank()) {
+                        continue;
+                    }
+                    lootTableDetails.putIfAbsent(detail.lootTableId, detail);
+                    ids.add(detail.lootTableId);
+                }
+            }
+            binding.lootTableIds = new ArrayList<>(ids);
+            binding.lootTables = new ArrayList<>();
+        }
+    }
+
+    public static final class StructureEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String structureId = "";
         public String structureType = "";
         public String generationStep = "";
@@ -49,39 +141,52 @@ public final class StructureIndexCache {
         public List<LootBinding> manualLootBindings = new ArrayList<>();
     }
 
-    public static final class SpawnerEntry {
+    public static final class SpawnerEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String templateId = "";
         public String entityId = "";
     }
 
-    public static final class GenerationBiomeGroup {
+    public static final class GenerationBiomeGroup implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String selector = "";
         public String selectorType = "";
         public List<String> resolvedBiomeIds = new ArrayList<>();
     }
 
-    public static final class LootBinding {
+    public static final class LootBinding implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String templateId = "";
         public String blockId = "";
         public String lootTableId = "";
         public List<String> storedItemIds = new ArrayList<>();
         public List<ItemStackSnapshot> storedItemStacks = new ArrayList<>();
         public List<String> itemIds = new ArrayList<>();
+        public List<String> lootTableIds = new ArrayList<>();
         public List<LootTableDetail> lootTables = new ArrayList<>();
     }
 
-    public static final class SpecialInfoEntry {
+    public static final class SpecialInfoEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String targetType = "";
         public String targetId = "";
         public String translationKey = "";
     }
 
-    public static final class LootTableDetail {
+    public static final class LootTableDetail implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String lootTableId = "";
         public List<LootItemEntry> entries = new ArrayList<>();
     }
 
-    public static final class LootItemEntry {
+    public static final class LootItemEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String itemId = "";
         public String itemStackTag = "";
         public int weight;
@@ -94,12 +199,16 @@ public final class StructureIndexCache {
         public List<LootTextEntry> countNotes = new ArrayList<>();
     }
 
-    public static final class LootTextEntry {
+    public static final class LootTextEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String translationKey = "";
         public List<String> args = new ArrayList<>();
     }
 
-    public static final class ItemStackSnapshot {
+    public static final class ItemStackSnapshot implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String itemId = "";
         public String stackTag = "";
     }
