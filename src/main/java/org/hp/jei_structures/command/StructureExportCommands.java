@@ -21,6 +21,7 @@ public final class StructureExportCommands {
 
         root.then(Commands.literal("export")
                 .executes(StructureExportCommands::export));
+        root.then(DebugCaptureQuickCommands.build());
         dispatcher.register(root);
     }
 
