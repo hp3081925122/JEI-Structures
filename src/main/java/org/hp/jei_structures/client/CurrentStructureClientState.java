@@ -3,6 +3,7 @@ package org.hp.jei_structures.client;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import org.hp.jei_structures.JeiStructures;
 import org.hp.jei_structures.jei.JeiStructuresPlugin;
 
 import java.util.HashSet;
@@ -18,7 +19,9 @@ public final class CurrentStructureClientState {
 
     public static void updateCurrentStructure(String structureId) {
         currentStructureId = structureId == null ? "" : structureId;
-        if (!currentStructureId.isBlank() && shownToastStructureIds.add(currentStructureId)) {
+        boolean showToast = !currentStructureId.isBlank() && shownToastStructureIds.add(currentStructureId);
+        JeiStructures.LOGGER.debug("Updated current structure client state: structure={}, showToast={}", currentStructureId, showToast);
+        if (showToast) {
             CurrentStructureToast.show(currentStructureId);
         }
     }

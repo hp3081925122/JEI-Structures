@@ -5,7 +5,9 @@
   "compatibilityLevel": "JAVA_25",
   "refmap": "jei_structures.refmap.json",
   "mixins": [
-
+    "ChunkMapCaptureSyncMixin",
+    "ServerGamePacketListenerCaptureSyncMixin",
+    "StructureCheckConcurrencyMixin"
   ],
   "client": [],
   "injectors": {

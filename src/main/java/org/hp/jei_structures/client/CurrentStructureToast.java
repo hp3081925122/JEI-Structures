@@ -50,8 +50,8 @@ public final class CurrentStructureToast implements Toast {
     public void extractRenderState(GuiGraphicsExtractor graphics, Font font, long timeSinceLastVisible) {
         drawBackground(graphics);
         graphics.fakeItem(icon, 8, 8);
-        drawAdaptive(graphics, font, title, TEXT_X, 7, 0xAA00AA);
-        drawAdaptive(graphics, font, hint, TEXT_X, 18, 0x222222);
+        drawAdaptive(graphics, font, title, TEXT_X, 7, 0xFFAA00AA);
+        drawAdaptive(graphics, font, hint, TEXT_X, 18, 0xFF222222);
     }
 
     @Override
@@ -63,10 +63,10 @@ public final class CurrentStructureToast implements Toast {
         String text = component.getString();
         int width = font.width(text);
         if (width <= TEXT_WIDTH) {
-            graphics.text(font, component, x, y, color);
+            graphics.text(font, component, x, y, color, false);
             return;
         }
-        graphics.text(font, font.plainSubstrByWidth(text, TEXT_WIDTH - font.width("...")) + "...", x, y, color);
+        graphics.text(font, font.plainSubstrByWidth(text, TEXT_WIDTH - font.width("...")) + "...", x, y, color, false);
     }
 
     private static void drawBackground(GuiGraphicsExtractor graphics) {

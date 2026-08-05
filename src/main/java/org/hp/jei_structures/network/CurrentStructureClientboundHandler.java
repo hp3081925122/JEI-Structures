@@ -13,6 +13,7 @@ public final class CurrentStructureClientboundHandler {
         if (FMLEnvironment.getDist() != Dist.CLIENT) {
             return;
         }
+        JeiStructures.LOGGER.debug("Received current structure payload: {}", structureId);
         try {
             Class<?> stateClass = Class.forName("org.hp.jei_structures.client.CurrentStructureClientState");
             stateClass.getMethod("updateCurrentStructure", String.class).invoke(null, structureId);

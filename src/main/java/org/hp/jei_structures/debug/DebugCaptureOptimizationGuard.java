@@ -47,7 +47,11 @@ public final class DebugCaptureOptimizationGuard {
     }
 
     public static boolean shouldSuppressClientboundPacket(ServerPlayer player, Packet<?> packet) {
-        if (!isSuppressingPlayerSync(player) || packet == null) {
+        return shouldSuppressClientboundPacket(player == null ? null : player.getUUID(), packet);
+    }
+
+    public static synchronized boolean shouldSuppressClientboundPacket(UUID playerId, Packet<?> packet) {
+        if (!JeiStructuresConfig.silentCaptureTeleport() || activePlayerId == null || !activePlayerId.equals(playerId) || packet == null) {
             return false;
         }
         return packet instanceof ClientboundPlayerPositionPacket
