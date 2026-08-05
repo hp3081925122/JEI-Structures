@@ -17,24 +17,34 @@ public final class StructureExportCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         var root = Commands.literal("jei_structures")
-                .requires(source -> source.hasPermission(2));
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS));
 
         root.then(Commands.literal("export")
                 .executes(StructureExportCommands::export));
-        root.then(DebugCaptureQuickCommands.build());
         dispatcher.register(root);
     }
 
     private static int export(CommandContext<CommandSourceStack> context) {
         try {
             Path path = StructureIndexExporter.export(context.getSource().getServer());
-            context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.export.success", path), true);
+            context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.export.success", path.toString()), true);
             return 1;
         } catch (Exception exception) {
-            String detail = DebugCaptureCommandSupport.buildExceptionDetail(exception);
+            String detail = buildExceptionDetail(exception);
             JeiStructures.LOGGER.error("JEI Structures export failed", exception);
             context.getSource().sendFailure(Component.translatable("jei_structures.command.export.failure", detail));
             return 0;
         }
+    }
+
+    private static String buildExceptionDetail(Exception exception) {
+        if (exception == null) {
+            return "";
+        }
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return exception.getClass().getSimpleName();
+        }
+        return exception.getClass().getSimpleName() + ": " + message;
     }
 }

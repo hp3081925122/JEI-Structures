@@ -2,19 +2,12 @@
   "required": true,
   "minVersion": "0.8",
   "package": "org.hp.jei_structures.mixin",
-  "compatibilityLevel": "JAVA_8",
-  "plugin": "org.hp.jei_structures.mixin.JeiStructuresMixinPlugin",
+  "compatibilityLevel": "JAVA_25",
   "refmap": "jei_structures.refmap.json",
   "mixins": [
-    "AsyncLocatorConfigDefaultMixin",
-    "ChunkMapCaptureSyncMixin",
-    "ChunkGeneratorLocateRadiusMixin",
-    "ServerGamePacketListenerCaptureSyncMixin",
-    "StructureCheckConcurrencyMixin"
+
   ],
-  "client": [
-    "emi.RecipeScreenMixin"
-  ],
+  "client": [],
   "injectors": {
     "defaultRequire": 1
   },

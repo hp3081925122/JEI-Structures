@@ -1,7 +1,8 @@
 package org.hp.jei_structures.debug;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -9,7 +10,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.hp.jei_structures.data.LootTableItemResolver;
 
 import java.util.ArrayList;
@@ -40,7 +41,7 @@ public final class DebugStructureCaptureScanning {
         List<LivingEntity> entities = context.level().getEntitiesOfClass(LivingEntity.class, bounds, entity -> entity != null && entity.isAlive() && !context.playerPredicate().test(entity));
         for (LivingEntity entity : entities) {
             sampled++;
-            ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(entity.getType());
+            Identifier entityId = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
             if (entityId != null) {
                 mobIds.add(entityId.toString());
             }
@@ -52,21 +53,21 @@ public final class DebugStructureCaptureScanning {
         return new MobSampleResult(sampled, Math.max(after - before, 0), after);
     }
 
-    public static LootBlockResult readLootBlock(BlockState state, BlockEntity blockEntity, LootTableItemResolver lootResolver) {
+    public static LootBlockResult readLootBlock(BlockState state, BlockEntity blockEntity, HolderLookup.Provider provider, LootTableItemResolver lootResolver) {
         if (state == null || blockEntity == null) {
             return null;
         }
-        ResourceLocation blockId = ForgeRegistries.BLOCKS.getKey(state.getBlock());
+        Identifier blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
         if (blockId == null) {
             return null;
         }
-        var nbt = blockEntity.saveWithId();
+        var nbt = blockEntity.saveWithoutMetadata(provider);
         String lootTableId = readLootTable(nbt);
         if (lootTableId.isBlank()) {
             return null;
         }
         LinkedHashSet<String> items = new LinkedHashSet<>();
-        ResourceLocation lootId = ResourceLocation.tryParse(lootTableId);
+        Identifier lootId = Identifier.tryParse(lootTableId);
         if (lootId != null && lootResolver != null) {
             items.addAll(lootResolver.resolveLootItems(lootId));
         }
@@ -79,7 +80,7 @@ public final class DebugStructureCaptureScanning {
         }
         List<BlockPos> positions = new ArrayList<>();
         for (ChunkPos chunkPos : placeChunks) {
-            LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+            LevelChunk chunk = level.getChunk(chunkPos.x(), chunkPos.z());
             for (Map.Entry<BlockPos, BlockEntity> entry : chunk.getBlockEntities().entrySet()) {
                 BlockPos pos = entry.getKey();
                 if (pos != null && box.isInside(pos)) {
@@ -91,11 +92,11 @@ public final class DebugStructureCaptureScanning {
     }
 
     public static String readLootTable(net.minecraft.nbt.CompoundTag nbt) {
-        if (nbt.contains("LootTable", net.minecraft.nbt.Tag.TAG_STRING)) {
-            return nbt.getString("LootTable");
+        if (nbt.contains("LootTable")) {
+            return nbt.getStringOr("LootTable", "");
         }
-        if (nbt.contains("loot_table", net.minecraft.nbt.Tag.TAG_STRING)) {
-            return nbt.getString("loot_table");
+        if (nbt.contains("loot_table")) {
+            return nbt.getStringOr("loot_table", "");
         }
         return "";
     }

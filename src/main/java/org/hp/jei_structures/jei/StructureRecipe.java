@@ -3,11 +3,11 @@ package org.hp.jei_structures.jei;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.hp.jei_structures.JeiStructures;
 import org.hp.jei_structures.data.ItemStackSnapshotHelper;
 import org.hp.jei_structures.data.StructureIndexCache;
@@ -55,7 +55,7 @@ public final class StructureRecipe {
     private static final int SLOT_SPACING = 18;
     private static final int GRID_COLUMNS = 6;
 
-    private final ResourceLocation id;
+    private final Identifier id;
     private final StructureIndexCache.StructureEntry entry;
     private final Component displayName;
     private volatile DisplayData displayData;
@@ -64,11 +64,11 @@ public final class StructureRecipe {
 
     public StructureRecipe(StructureIndexCache.StructureEntry entry) {
         this.entry = entry != null ? entry : new StructureIndexCache.StructureEntry();
-        this.id = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, sanitize(this.entry.structureId));
+        this.id = Identifier.fromNamespaceAndPath(JeiStructures.MODID, sanitize(this.entry.structureId));
         this.displayName = StructureTextHelper.getStructureComponent(this.entry.structureId);
     }
 
-    public ResourceLocation getId() {
+    public Identifier getId() {
         return id;
     }
 
@@ -672,7 +672,7 @@ public final class StructureRecipe {
         }
         List<GenerationBiomeDisplay> displays = new ArrayList<>();
         for (Map.Entry<String, LinkedHashSet<String>> biomeEntry : sourcesByBiomeId.entrySet()) {
-            ResourceLocation biomeId = ResourceLocation.tryParse(biomeEntry.getKey());
+            Identifier biomeId = Identifier.tryParse(biomeEntry.getKey());
             if (biomeId == null) {
                 continue;
             }
@@ -917,7 +917,7 @@ public final class StructureRecipe {
         if (biomeId == null || biomeId.isBlank()) {
             return;
         }
-        ResourceLocation id = ResourceLocation.tryParse(biomeId);
+        Identifier id = Identifier.tryParse(biomeId);
         if (id == null) {
             return;
         }
@@ -1065,8 +1065,8 @@ public final class StructureRecipe {
     }
 
     private static ItemStack toItem(String itemId) {
-        ResourceLocation id = ResourceLocation.tryParse(itemId);
-        Item item = id == null ? null : ForgeRegistries.ITEMS.getValue(id);
+        Identifier id = Identifier.tryParse(itemId);
+        Item item = id == null ? null : BuiltInRegistries.ITEM.get(id).map(reference -> reference.value()).orElse(null);
         if (item == null || item == Items.AIR) {
             return ItemStack.EMPTY;
         }
@@ -1074,8 +1074,8 @@ public final class StructureRecipe {
     }
 
     private static ItemStack toBlockItem(String blockId) {
-        ResourceLocation id = ResourceLocation.tryParse(blockId);
-        var block = id == null ? null : ForgeRegistries.BLOCKS.getValue(id);
+        Identifier id = Identifier.tryParse(blockId);
+        var block = id == null ? null : BuiltInRegistries.BLOCK.get(id).map(reference -> reference.value()).orElse(null);
         if (block == null) {
             return ItemStack.EMPTY;
         }
@@ -1087,8 +1087,8 @@ public final class StructureRecipe {
     }
 
     private static ItemStack toEntityItem(String entityId) {
-        ResourceLocation id = ResourceLocation.tryParse(entityId);
-        var entityType = id == null ? null : ForgeRegistries.ENTITY_TYPES.getValue(id);
+        Identifier id = Identifier.tryParse(entityId);
+        var entityType = id == null ? null : BuiltInRegistries.ENTITY_TYPE.get(id).map(reference -> reference.value()).orElse(null);
         if (entityType == null) {
             return ItemStack.EMPTY;
         }
@@ -1106,7 +1106,7 @@ public final class StructureRecipe {
         }
         stacks.sort(Comparator
                 .comparing((ItemStack stack) -> stack.getHoverName().getString(), String.CASE_INSENSITIVE_ORDER)
-                .thenComparing(stack -> String.valueOf(ForgeRegistries.ITEMS.getKey(stack.getItem())), String.CASE_INSENSITIVE_ORDER));
+                .thenComparing(stack -> String.valueOf(BuiltInRegistries.ITEM.getKey(stack.getItem())), String.CASE_INSENSITIVE_ORDER));
         return stacks;
     }
 
@@ -1121,17 +1121,18 @@ public final class StructureRecipe {
         }
         stacks.sort(Comparator
                 .comparing((ItemStack stack) -> stack.getHoverName().getString(), String.CASE_INSENSITIVE_ORDER)
-                .thenComparing(stack -> String.valueOf(ForgeRegistries.ITEMS.getKey(stack.getItem())), String.CASE_INSENSITIVE_ORDER));
+                .thenComparing(stack -> String.valueOf(BuiltInRegistries.ITEM.getKey(stack.getItem())), String.CASE_INSENSITIVE_ORDER));
         return stacks;
     }
 
     private static ItemStack findEgg(net.minecraft.world.entity.EntityType<?> entityType) {
-        for (Item item : ForgeRegistries.ITEMS.getValues()) {
-            if (item instanceof net.minecraft.world.item.SpawnEggItem spawnEggItem && spawnEggItem.getType(null) == entityType) {
-                return new ItemStack(item);
-            }
+        ItemStack eggStack = net.minecraft.world.item.SpawnEggItem.byId(entityType)
+                .map(holder -> new ItemStack(holder.value()))
+                .orElseGet(() -> ItemStack.EMPTY);
+        if (eggStack.isEmpty()) {
+            JeiStructures.LOGGER.debug("No spawn egg found for entity type: {}", BuiltInRegistries.ENTITY_TYPE.getKey(entityType));
         }
-        return ItemStack.EMPTY;
+        return eggStack;
     }
 
     private static String sanitize(String value) {

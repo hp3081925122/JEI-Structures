@@ -9,9 +9,9 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.Tag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.resources.Resource;
@@ -28,7 +28,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.hp.jei_structures.JeiStructures;
 import org.hp.jei_structures.data.ItemStackSnapshotHelper;
 import org.hp.jei_structures.data.LootTableItemResolver;
@@ -70,7 +70,7 @@ import java.util.Set;
 public final class StructureIndexExporter {
 
     private static final Set<String> SUSPICIOUS_BLOCKS = Set.of("minecraft:suspicious_sand", "minecraft:suspicious_gravel");
-    private static final TagKey<Block> SPECIAL_DISPLAY_BLOCKS_TAG = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, "special_display_blocks"));
+    private static final TagKey<Block> SPECIAL_DISPLAY_BLOCKS_TAG = TagKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath(JeiStructures.MODID, "special_display_blocks"));
 
     private StructureIndexExporter() {
     }
@@ -78,9 +78,9 @@ public final class StructureIndexExporter {
     public static Path export(MinecraftServer server) throws Exception {
         ResourceManager resourceManager = server.getResourceManager();
         RegistryAccess registryAccess = server.registryAccess();
-        Registry<Item> itemRegistry = server.registryAccess().registryOrThrow(Registries.ITEM);
-        Registry<Biome> biomeRegistry = registryAccess.registryOrThrow(Registries.BIOME);
-        Registry<net.minecraft.world.level.levelgen.structure.Structure> structureRegistry = server.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Registry<Item> itemRegistry = server.registryAccess().lookupOrThrow(Registries.ITEM);
+        Registry<Biome> biomeRegistry = registryAccess.lookupOrThrow(Registries.BIOME);
+        Registry<net.minecraft.world.level.levelgen.structure.Structure> structureRegistry = server.registryAccess().lookupOrThrow(Registries.STRUCTURE);
         Map<String, List<String>> biomeDimensions = collectBiomeDimensions(server, biomeRegistry);
         StructureBindingData bindingData = StructureBindingLoader.loadAll(resourceManager);
         StructureBlacklistData blacklistData = StructureBlacklistLoader.loadAll(resourceManager);
@@ -90,13 +90,13 @@ public final class StructureIndexExporter {
         StructureIndexCache cache = new StructureIndexCache();
         cache.generatedAt = Instant.now().toString();
 
-        LootTableItemResolver lootResolver = new LootTableItemResolver(resourceManager, itemRegistry, server.overworld());
+        LootTableItemResolver lootResolver = new LootTableItemResolver(resourceManager, itemRegistry, registryAccess, server.overworld());
         List<StructureIndexCache.StructureEntry> entries = new ArrayList<>();
         int skippedCount = 0;
 
-        for (ResourceLocation structureId : structureRegistry.keySet()) {
+        for (Identifier structureId : structureRegistry.keySet()) {
             try {
-                Structure structure = structureRegistry.get(structureId);
+                Structure structure = structureRegistry.get(structureId).map(reference -> reference.value()).orElse(null);
                 StructureIndexCache.StructureEntry entry = exportStructure(structureId, structure, resourceManager, lootResolver, biomeRegistry, biomeDimensions, bindingData, blacklistData, specialInfoData);
                 if (entry != null) {
                     entries.add(entry);
@@ -124,7 +124,7 @@ public final class StructureIndexExporter {
         return path;
     }
 
-    private static StructureIndexCache.StructureEntry exportStructure(ResourceLocation structureId, Structure structure, ResourceManager resourceManager, LootTableItemResolver lootResolver, Registry<Biome> biomeRegistry, Map<String, List<String>> biomeDimensions, StructureBindingData bindingData, StructureBlacklistData blacklistData, StructureSpecialInfoData specialInfoData) {
+    private static StructureIndexCache.StructureEntry exportStructure(Identifier structureId, Structure structure, ResourceManager resourceManager, LootTableItemResolver lootResolver, Registry<Biome> biomeRegistry, Map<String, List<String>> biomeDimensions, StructureBindingData bindingData, StructureBlacklistData blacklistData, StructureSpecialInfoData specialInfoData) {
         JsonObject structureJson = readJson(resourceManager, toStructureJsonLocation(structureId));
         if (structureJson == null) {
             return null;
@@ -148,9 +148,9 @@ public final class StructureIndexExporter {
         collectStructureSpawns(structureJson, spawnOverrideEntities);
         allMobEntityIds.addAll(spawnOverrideEntities);
 
-        ResourceLocation startPool = null;
+        Identifier startPool = null;
         if (structureJson != null) {
-            startPool = getResourceLocation(structureJson, "start_pool");
+            startPool = getIdentifier(structureJson, "start_pool");
             if (startPool != null) {
                 collectTemplatesFromPool(resourceManager, startPool, templateIds, new LinkedHashSet<>(), new LinkedHashSet<>());
             }
@@ -158,7 +158,7 @@ public final class StructureIndexExporter {
         JeiStructures.LOGGER.debug("Structure {} start pool: {}, template count: {}", structureId, startPool, templateIds.size());
 
         for (String templateId : templateIds) {
-            TemplateScanResult result = scanTemplate(resourceManager, ResourceLocation.tryParse(templateId));
+            TemplateScanResult result = scanTemplate(resourceManager, Identifier.tryParse(templateId));
             if (result == null) {
                 continue;
             }
@@ -183,18 +183,18 @@ public final class StructureIndexExporter {
         LinkedHashSet<String> entityLootItems = new LinkedHashSet<>();
         LinkedHashSet<String> mobEggItemIds = new LinkedHashSet<>();
         for (String entityId : allMobEntityIds) {
-            EntityType<?> entityType = ForgeRegistries.ENTITY_TYPES.getValue(ResourceLocation.tryParse(entityId));
+            EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(Identifier.tryParse(entityId)).map(reference -> reference.value()).orElse(null);
             if (entityType == null) {
                 continue;
             }
             ItemStack eggStack = findEgg(entityType);
             if (!eggStack.isEmpty()) {
-                ResourceLocation eggId = ForgeRegistries.ITEMS.getKey(eggStack.getItem());
+                Identifier eggId = BuiltInRegistries.ITEM.getKey(eggStack.getItem());
                 if (eggId != null) {
                     mobEggItemIds.add(eggId.toString());
                 }
             }
-            ResourceLocation lootTable = entityType.getDefaultLootTable();
+            Identifier lootTable = entityType.getDefaultLootTable().map(resourceKey -> resourceKey.identifier()).orElse(null);
             if (lootTable == null) {
                 continue;
             }
@@ -236,14 +236,14 @@ public final class StructureIndexExporter {
         return entry;
     }
 
-    private static void applyConfiguredMobBindings(ResourceLocation structureId, LinkedHashSet<String> allMobEntityIds, StructureBindingData bindingData) {
+    private static void applyConfiguredMobBindings(Identifier structureId, LinkedHashSet<String> allMobEntityIds, StructureBindingData bindingData) {
         List<String> configuredEntityIds = bindingData.getStructureToMobs().get(structureId.toString());
         if (configuredEntityIds != null) {
             allMobEntityIds.addAll(configuredEntityIds);
         }
     }
 
-    private static void applyConfiguredSpawnedEntityBindings(ResourceLocation structureId, LinkedHashSet<String> spawnOverrideEntities, LinkedHashSet<String> templateEntities, StructureBindingData bindingData) {
+    private static void applyConfiguredSpawnedEntityBindings(Identifier structureId, LinkedHashSet<String> spawnOverrideEntities, LinkedHashSet<String> templateEntities, StructureBindingData bindingData) {
         List<String> configuredEntityIds = bindingData.getStructureToMobs().get(structureId.toString());
         if (configuredEntityIds != null) {
             spawnOverrideEntities.addAll(configuredEntityIds);
@@ -251,7 +251,7 @@ public final class StructureIndexExporter {
         }
     }
 
-    private static void applyConfiguredLootBindings(ResourceLocation structureId, StructureIndexCache.StructureEntry entry, LootTableItemResolver lootResolver, StructureBindingData bindingData, StructureBlacklistData blacklistData) {
+    private static void applyConfiguredLootBindings(Identifier structureId, StructureIndexCache.StructureEntry entry, LootTableItemResolver lootResolver, StructureBindingData bindingData, StructureBlacklistData blacklistData) {
         List<StructureLootBinding> bindings = bindingData.getStructureToLootBindings().get(structureId.toString());
         if (bindings == null || bindings.isEmpty()) {
             return;
@@ -276,7 +276,7 @@ public final class StructureIndexExporter {
                 if (detail != null) {
                     lootBinding.lootTables.add(detail);
                 }
-                itemIds.addAll(lootResolver.resolveLootItems(ResourceLocation.tryParse(lootTableId)));
+                itemIds.addAll(lootResolver.resolveLootItems(Identifier.tryParse(lootTableId)));
             }
             if (lootBinding.lootTableId != null && blacklistData != null && blacklistData.isLootTableBlocked(structureId.toString(), lootBinding.lootTableId)) {
                 lootBinding.lootTableId = lootBinding.lootTables.isEmpty() ? "" : lootBinding.lootTables.get(0).lootTableId;
@@ -293,7 +293,7 @@ public final class StructureIndexExporter {
         }
     }
 
-    private static void applyEntityAndBlockBlacklist(ResourceLocation structureId, StructureIndexCache.StructureEntry entry, LinkedHashSet<String> spawnOverrideEntities, LinkedHashSet<String> templateEntities, LinkedHashSet<String> allMobEntityIds, StructureBlacklistData blacklistData) {
+    private static void applyEntityAndBlockBlacklist(Identifier structureId, StructureIndexCache.StructureEntry entry, LinkedHashSet<String> spawnOverrideEntities, LinkedHashSet<String> templateEntities, LinkedHashSet<String> allMobEntityIds, StructureBlacklistData blacklistData) {
         if (structureId == null || blacklistData == null) {
             return;
         }
@@ -305,7 +305,7 @@ public final class StructureIndexExporter {
         entry.specialDisplayBlocks.removeIf(blockId -> blacklistData.isBlockBlocked(id, blockId));
     }
 
-    private static void applyLootBlacklist(ResourceLocation structureId, StructureIndexCache.StructureEntry entry, StructureBlacklistData blacklistData) {
+    private static void applyLootBlacklist(Identifier structureId, StructureIndexCache.StructureEntry entry, StructureBlacklistData blacklistData) {
         if (structureId == null || entry == null || blacklistData == null) {
             return;
         }
@@ -314,7 +314,7 @@ public final class StructureIndexExporter {
         filterLootBindings(structureId, entry.manualLootBindings, blacklistData, false);
     }
 
-    private static void filterLootBindings(ResourceLocation structureId, List<StructureIndexCache.LootBinding> bindings, StructureBlacklistData blacklistData, boolean checkContainer) {
+    private static void filterLootBindings(Identifier structureId, List<StructureIndexCache.LootBinding> bindings, StructureBlacklistData blacklistData, boolean checkContainer) {
         if (bindings == null || bindings.isEmpty()) {
             return;
         }
@@ -367,7 +367,7 @@ public final class StructureIndexExporter {
         binding.itemIds = new ArrayList<>(itemIds);
     }
 
-    private static boolean isLootBindingContainerBlocked(ResourceLocation structureId, StructureIndexCache.LootBinding binding, StructureBlacklistData blacklistData) {
+    private static boolean isLootBindingContainerBlocked(Identifier structureId, StructureIndexCache.LootBinding binding, StructureBlacklistData blacklistData) {
         return structureId != null
                 && binding != null
                 && binding.blockId != null
@@ -389,7 +389,7 @@ public final class StructureIndexExporter {
                     binding.lootTables.add(detail);
                 }
             }
-            itemIds.addAll(lootResolver.resolveLootItems(ResourceLocation.tryParse(binding.lootTableId)));
+            itemIds.addAll(lootResolver.resolveLootItems(Identifier.tryParse(binding.lootTableId)));
         }
         binding.itemIds = new ArrayList<>(itemIds);
     }
@@ -440,7 +440,7 @@ public final class StructureIndexExporter {
         if (lootTableId == null || lootTableId.isBlank() || lootResolver == null) {
             return null;
         }
-        return lootResolver.resolveLootTableDetail(ResourceLocation.tryParse(lootTableId));
+        return lootResolver.resolveLootTableDetail(Identifier.tryParse(lootTableId));
     }
 
     private static String getGenerationStep(JsonObject structureJson) {
@@ -517,9 +517,9 @@ public final class StructureIndexExporter {
     private static Map<String, List<String>> collectBiomeDimensions(MinecraftServer server, Registry<Biome> biomeRegistry) {
         Map<String, LinkedHashSet<String>> dimensionsByBiome = new HashMap<>();
         for (ServerLevel level : server.forgeGetWorldMap().values()) {
-            ResourceLocation dimensionId = level.dimension().location();
+            Identifier dimensionId = level.dimension().identifier();
             for (var holder : level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes()) {
-                ResourceLocation biomeId = biomeRegistry.getKey(holder.value());
+                Identifier biomeId = biomeRegistry.getKey(holder.value());
                 if (biomeId == null) {
                     continue;
                 }
@@ -527,12 +527,12 @@ public final class StructureIndexExporter {
             }
         }
         for (var entry : biomeRegistry.entrySet()) {
-            ResourceLocation biomeId = entry.getKey().location();
+            Identifier biomeId = entry.getKey().identifier();
             if (biomeId == null) {
                 continue;
             }
             LinkedHashSet<String> dimensionIds = dimensionsByBiome.computeIfAbsent(biomeId.toString(), key -> new LinkedHashSet<>());
-            if (dimensionIds.contains(Level.OVERWORLD.location().toString())) {
+            if (dimensionIds.contains(Level.OVERWORLD.identifier().toString())) {
                 continue;
             }
             Biome biome = entry.getValue();
@@ -541,7 +541,7 @@ public final class StructureIndexExporter {
             }
             var holder = biomeRegistry.wrapAsHolder(biome);
             if (holder.is(BiomeTags.IS_OVERWORLD)) {
-                dimensionIds.add(Level.OVERWORLD.location().toString());
+                dimensionIds.add(Level.OVERWORLD.identifier().toString());
             }
         }
         Map<String, List<String>> result = new HashMap<>();
@@ -555,7 +555,7 @@ public final class StructureIndexExporter {
         return result;
     }
 
-    private static Map<String, List<String>> collectEntryBiomeDimensions(ResourceLocation structureId, List<String> biomeIds, Map<String, List<String>> biomeDimensions) {
+    private static Map<String, List<String>> collectEntryBiomeDimensions(Identifier structureId, List<String> biomeIds, Map<String, List<String>> biomeDimensions) {
         Map<String, List<String>> result = new HashMap<>();
         for (String biomeId : biomeIds) {
             List<String> dimensionIds = biomeDimensions.get(biomeId);
@@ -571,24 +571,20 @@ public final class StructureIndexExporter {
             return;
         }
         if (selector.startsWith("#")) {
-            ResourceLocation tagId = ResourceLocation.tryParse(selector.substring(1));
+            Identifier tagId = Identifier.tryParse(selector.substring(1));
             if (tagId == null) {
                 return;
             }
             TagKey<Biome> tagKey = TagKey.create(Registries.BIOME, tagId);
-            Optional<HolderSet.Named<Biome>> tag = biomeRegistry.getTag(tagKey);
-            if (tag.isEmpty()) {
-                return;
-            }
-            for (var holder : tag.get()) {
-                ResourceLocation biomeId = biomeRegistry.getKey(holder.value());
+            for (var holder : biomeRegistry.getTagOrEmpty(tagKey)) {
+                Identifier biomeId = biomeRegistry.getKey(holder.value());
                 if (biomeId != null) {
                     resolved.add(biomeId.toString());
                 }
             }
             return;
         }
-        ResourceLocation biomeId = ResourceLocation.tryParse(selector);
+        Identifier biomeId = Identifier.tryParse(selector);
         if (biomeId != null && biomeRegistry.containsKey(biomeId)) {
             resolved.add(biomeId.toString());
         }
@@ -598,7 +594,7 @@ public final class StructureIndexExporter {
         if (biomeId == null || biomeId.isBlank()) {
             return "";
         }
-        ResourceLocation id = ResourceLocation.tryParse(biomeId);
+        Identifier id = Identifier.tryParse(biomeId);
         if (id == null) {
             return biomeId;
         }
@@ -610,7 +606,7 @@ public final class StructureIndexExporter {
         if (dimensionId == null || dimensionId.isBlank()) {
             return "";
         }
-        ResourceLocation id = ResourceLocation.tryParse(dimensionId);
+        Identifier id = Identifier.tryParse(dimensionId);
         if (id == null) {
             return dimensionId;
         }
@@ -656,12 +652,9 @@ public final class StructureIndexExporter {
     }
 
     private static ItemStack findEgg(EntityType<?> entityType) {
-        for (Item item : ForgeRegistries.ITEMS.getValues()) {
-            if (item instanceof SpawnEggItem spawnEggItem && spawnEggItem.getType(null) == entityType) {
-                return new ItemStack(item);
-            }
-        }
-        return new ItemStack(Items.AIR);
+        return SpawnEggItem.byId(entityType)
+                .map(holder -> new ItemStack(holder.value()))
+                .orElseGet(() -> new ItemStack(Items.AIR));
     }
 
     private static List<String> flattenItems(List<StructureIndexCache.LootBinding> bindings) {
@@ -739,7 +732,7 @@ public final class StructureIndexExporter {
                 if (!spawnElement.isJsonObject()) {
                     continue;
                 }
-                ResourceLocation entityId = getResourceLocation(spawnElement.getAsJsonObject(), "type");
+                Identifier entityId = getIdentifier(spawnElement.getAsJsonObject(), "type");
                 if (entityId != null) {
                     entityIds.add(entityId.toString());
                 }
@@ -747,7 +740,7 @@ public final class StructureIndexExporter {
         }
     }
 
-    private static void collectTemplatesFromPool(ResourceManager resourceManager, ResourceLocation poolId, Set<String> templateIds, Set<String> visitedPools, Set<String> scannedTemplates) {
+    private static void collectTemplatesFromPool(ResourceManager resourceManager, Identifier poolId, Set<String> templateIds, Set<String> visitedPools, Set<String> scannedTemplates) {
         if (!visitedPools.add(poolId.toString())) {
             return;
         }
@@ -774,7 +767,7 @@ public final class StructureIndexExporter {
     private static void collectTemplatesFromPoolElement(ResourceManager resourceManager, JsonObject element, Set<String> templateIds, Set<String> visitedPools, Set<String> scannedTemplates) {
         String elementType = getString(element, "element_type");
         if ("minecraft:single_pool_element".equals(elementType) || "minecraft:legacy_single_pool_element".equals(elementType)) {
-            ResourceLocation location = getResourceLocation(element, "location");
+            Identifier location = getIdentifier(element, "location");
             if (location != null && !"minecraft:empty".equals(location.toString())) {
                 templateIds.add(location.toString());
                 collectChildPoolsFromTemplate(resourceManager, location, templateIds, visitedPools, scannedTemplates);
@@ -793,13 +786,13 @@ public final class StructureIndexExporter {
             }
             return;
         }
-        ResourceLocation projectionPool = getResourceLocation(element, "pool");
+        Identifier projectionPool = getIdentifier(element, "pool");
         if (projectionPool != null) {
             collectTemplatesFromPool(resourceManager, projectionPool, templateIds, visitedPools, scannedTemplates);
         }
     }
 
-    private static void collectChildPoolsFromTemplate(ResourceManager resourceManager, ResourceLocation templateId, Set<String> templateIds, Set<String> visitedPools, Set<String> scannedTemplates) {
+    private static void collectChildPoolsFromTemplate(ResourceManager resourceManager, Identifier templateId, Set<String> templateIds, Set<String> visitedPools, Set<String> scannedTemplates) {
         if (templateId == null || !scannedTemplates.add(templateId.toString())) {
             return;
         }
@@ -808,22 +801,28 @@ public final class StructureIndexExporter {
             return;
         }
         List<String> palette = readTemplatePalette(root);
-        ListTag blocks = root.getList("blocks", Tag.TAG_COMPOUND);
+        ListTag blocks = root.getListOrEmpty("blocks");
         for (int index = 0; index < blocks.size(); index++) {
-            CompoundTag block = blocks.getCompound(index);
-            int stateIndex = block.getInt("state");
-            String blockId = stateIndex >= 0 && stateIndex < palette.size() ? palette.get(stateIndex) : "";
-            if (!"minecraft:jigsaw".equals(blockId) || !block.contains("nbt", Tag.TAG_COMPOUND)) {
+            Optional<CompoundTag> blockOptional = blocks.getCompound(index);
+            if (blockOptional.isEmpty()) {
                 continue;
             }
-            ResourceLocation childPool = getNbtResourceLocation(block.getCompound("nbt"), "pool");
-            if (childPool != null) {
-                collectTemplatesFromPool(resourceManager, childPool, templateIds, visitedPools, scannedTemplates);
+            CompoundTag block = blockOptional.get();
+            int stateIndex = block.getIntOr("state", -1);
+            String blockId = stateIndex >= 0 && stateIndex < palette.size() ? palette.get(stateIndex) : "";
+            if (!"minecraft:jigsaw".equals(blockId) || !block.contains("nbt")) {
+                continue;
             }
+            block.getCompound("nbt").ifPresent(blockNbt -> {
+                Identifier childPool = getNbtIdentifier(blockNbt, "pool");
+                if (childPool != null) {
+                    collectTemplatesFromPool(resourceManager, childPool, templateIds, visitedPools, scannedTemplates);
+                }
+            });
         }
     }
 
-    private static TemplateScanResult scanTemplate(ResourceManager resourceManager, ResourceLocation templateId) {
+    private static TemplateScanResult scanTemplate(ResourceManager resourceManager, Identifier templateId) {
         if (templateId == null) {
             return null;
         }
@@ -835,30 +834,34 @@ public final class StructureIndexExporter {
         return parseTemplate(templateId, root);
     }
 
-    private static CompoundTag readTemplateRoot(ResourceManager resourceManager, ResourceLocation templateId) {
+    private static CompoundTag readTemplateRoot(ResourceManager resourceManager, Identifier templateId) {
         Optional<Resource> resource = resourceManager.getResource(toTemplateLocation(templateId));
         if (resource.isEmpty()) {
             return null;
         }
         try (InputStream inputStream = resource.get().open()) {
-            return NbtIo.readCompressed(inputStream);
+            return NbtIo.readCompressed(inputStream, NbtAccounter.unlimitedHeap());
         } catch (Exception exception) {
             JeiStructures.LOGGER.warn("Failed to read structure template: {}", templateId, exception);
             return null;
         }
     }
 
-    private static TemplateScanResult parseTemplate(ResourceLocation templateId, CompoundTag root) {
+    private static TemplateScanResult parseTemplate(Identifier templateId, CompoundTag root) {
         TemplateScanResult result = new TemplateScanResult();
         List<String> palette = readTemplatePalette(root);
 
-        ListTag blocks = root.getList("blocks", Tag.TAG_COMPOUND);
+        ListTag blocks = root.getListOrEmpty("blocks");
         for (int index = 0; index < blocks.size(); index++) {
-            CompoundTag block = blocks.getCompound(index);
-            int stateIndex = block.getInt("state");
+            Optional<CompoundTag> blockOptional = blocks.getCompound(index);
+            if (blockOptional.isEmpty()) {
+                continue;
+            }
+            CompoundTag block = blockOptional.get();
+            int stateIndex = block.getIntOr("state", -1);
             String blockId = stateIndex >= 0 && stateIndex < palette.size() ? palette.get(stateIndex) : "";
             addSpecialDisplayBlock(blockId, result);
-            CompoundTag blockEntity = block.contains("nbt", Tag.TAG_COMPOUND) ? block.getCompound("nbt") : null;
+            CompoundTag blockEntity = block.getCompound("nbt").orElse(null);
             if (blockId.isEmpty() || blockEntity == null) {
                 continue;
             }
@@ -866,17 +869,22 @@ public final class StructureIndexExporter {
             addLootBinding(templateId, blockId, blockEntity, result);
         }
 
-        ListTag entities = root.getList("entities", Tag.TAG_COMPOUND);
+        ListTag entities = root.getListOrEmpty("entities");
         for (int index = 0; index < entities.size(); index++) {
-            CompoundTag entityEntry = entities.getCompound(index);
-            if (!entityEntry.contains("nbt", Tag.TAG_COMPOUND)) {
+            Optional<CompoundTag> entityEntryOptional = entities.getCompound(index);
+            if (entityEntryOptional.isEmpty()) {
                 continue;
             }
-            CompoundTag entityNbt = entityEntry.getCompound("nbt");
-            String entityId = entityNbt.getString("id");
-            if (!entityId.isBlank()) {
-                result.directEntities.add(entityId);
+            CompoundTag entityEntry = entityEntryOptional.get();
+            if (!entityEntry.contains("nbt")) {
+                continue;
             }
+            entityEntry.getCompound("nbt").ifPresent(entityNbt -> {
+                String entityId = entityNbt.getStringOr("id", "");
+                if (!entityId.isBlank()) {
+                    result.directEntities.add(entityId);
+                }
+            });
         }
 
         return result;
@@ -886,17 +894,17 @@ public final class StructureIndexExporter {
         if (blockId == null || blockId.isBlank() || result == null) {
             return;
         }
-        ResourceLocation blockKey = ResourceLocation.tryParse(blockId);
+        Identifier blockKey = Identifier.tryParse(blockId);
         if (blockKey == null) {
             return;
         }
-        Block block = ForgeRegistries.BLOCKS.getValue(blockKey);
+        Block block = BuiltInRegistries.BLOCK.get(blockKey).map(reference -> reference.value()).orElse(null);
         if (block != null && block.defaultBlockState().is(SPECIAL_DISPLAY_BLOCKS_TAG)) {
             result.specialDisplayBlocks.add(blockId);
         }
     }
 
-    private static void addSpawner(ResourceLocation templateId, String blockId, CompoundTag blockEntity, TemplateScanResult result) {
+    private static void addSpawner(Identifier templateId, String blockId, CompoundTag blockEntity, TemplateScanResult result) {
         if (!"minecraft:spawner".equals(blockId)) {
             return;
         }
@@ -911,7 +919,7 @@ public final class StructureIndexExporter {
         result.directEntities.add(entityId);
     }
 
-    private static void addLootBinding(ResourceLocation templateId, String blockId, CompoundTag blockEntity, TemplateScanResult result) {
+    private static void addLootBinding(Identifier templateId, String blockId, CompoundTag blockEntity, TemplateScanResult result) {
         String lootTable = findLootTable(blockEntity);
         List<StructureIndexCache.ItemStackSnapshot> storedItemStacks = StoredItemNbtReader.readStoredItemSnapshots(blockEntity);
         LinkedHashSet<String> storedItems = new LinkedHashSet<>();
@@ -934,29 +942,31 @@ public final class StructureIndexExporter {
     }
 
     private static String findSpawnerEntity(CompoundTag blockEntity) {
-        if (blockEntity.contains("SpawnData", Tag.TAG_COMPOUND)) {
-            CompoundTag spawnData = blockEntity.getCompound("SpawnData");
-            if (spawnData.contains("entity", Tag.TAG_COMPOUND)) {
-                String entityId = spawnData.getCompound("entity").getString("id");
-                if (!entityId.isBlank()) {
-                    return entityId;
-                }
+        if (blockEntity.contains("SpawnData")) {
+            CompoundTag spawnData = blockEntity.getCompoundOrEmpty("SpawnData");
+            Optional<String> entityId = spawnData.getCompound("entity").flatMap(entity -> entity.getString("id"));
+            if (entityId.isPresent() && !entityId.get().isBlank()) {
+                return entityId.get();
             }
-            if (spawnData.contains("Entity", Tag.TAG_COMPOUND)) {
-                String entityId = spawnData.getCompound("Entity").getString("id");
-                if (!entityId.isBlank()) {
-                    return entityId;
-                }
+            entityId = spawnData.getCompound("Entity").flatMap(entity -> entity.getString("id"));
+            if (entityId.isPresent() && !entityId.get().isBlank()) {
+                return entityId.get();
             }
         }
-        if (blockEntity.contains("SpawnPotentials", Tag.TAG_LIST)) {
-            ListTag spawnPotentials = blockEntity.getList("SpawnPotentials", Tag.TAG_COMPOUND);
+        if (blockEntity.contains("SpawnPotentials")) {
+            ListTag spawnPotentials = blockEntity.getListOrEmpty("SpawnPotentials");
             for (int index = 0; index < spawnPotentials.size(); index++) {
-                CompoundTag potential = spawnPotentials.getCompound(index);
-                if (potential.contains("data", Tag.TAG_COMPOUND)) {
-                    String entityId = potential.getCompound("data").getCompound("entity").getString("id");
-                    if (!entityId.isBlank()) {
-                        return entityId;
+                Optional<CompoundTag> potentialOptional = spawnPotentials.getCompound(index);
+                if (potentialOptional.isEmpty()) {
+                    continue;
+                }
+                CompoundTag potential = potentialOptional.get();
+                if (potential.contains("data")) {
+                    Optional<String> entityId = potential.getCompound("data")
+                            .flatMap(data -> data.getCompound("entity"))
+                            .flatMap(entity -> entity.getString("id"));
+                    if (entityId.isPresent() && !entityId.get().isBlank()) {
+                        return entityId.get();
                     }
                 }
             }
@@ -965,33 +975,36 @@ public final class StructureIndexExporter {
     }
 
     private static String findLootTable(CompoundTag blockEntity) {
-        if (blockEntity.contains("LootTable", Tag.TAG_STRING)) {
-            return blockEntity.getString("LootTable");
+        if (blockEntity.contains("LootTable")) {
+            return blockEntity.getStringOr("LootTable", "");
         }
-        if (blockEntity.contains("loot_table", Tag.TAG_STRING)) {
-            return blockEntity.getString("loot_table");
+        if (blockEntity.contains("loot_table")) {
+            return blockEntity.getStringOr("loot_table", "");
         }
         return "";
     }
 
     private static List<String> readTemplatePalette(CompoundTag root) {
         List<String> palette = new ArrayList<>();
-        ListTag paletteTag = root.getList("palette", Tag.TAG_COMPOUND);
+        ListTag paletteTag = root.getListOrEmpty("palette");
         for (int index = 0; index < paletteTag.size(); index++) {
-            palette.add(paletteTag.getCompound(index).getString("Name"));
+            Optional<CompoundTag> paletteEntry = paletteTag.getCompound(index);
+            if (paletteEntry.isPresent()) {
+                palette.add(paletteEntry.get().getStringOr("Name", ""));
+            }
         }
         return palette;
     }
 
-    private static ResourceLocation getNbtResourceLocation(CompoundTag tag, String key) {
-        if (tag == null || !tag.contains(key, Tag.TAG_STRING)) {
+    private static Identifier getNbtIdentifier(CompoundTag tag, String key) {
+        if (tag == null || !tag.contains(key)) {
             return null;
         }
-        String value = tag.getString(key);
-        return value.isBlank() ? null : ResourceLocation.tryParse(value);
+        String value = tag.getStringOr(key, "");
+        return value.isBlank() ? null : Identifier.tryParse(value);
     }
 
-    private static JsonObject readJson(ResourceManager resourceManager, ResourceLocation location) {
+    private static JsonObject readJson(ResourceManager resourceManager, Identifier location) {
         try {
             Optional<Resource> resource = resourceManager.getResource(location);
             if (resource.isEmpty()) {
@@ -1007,16 +1020,16 @@ public final class StructureIndexExporter {
         }
     }
 
-    private static ResourceLocation toStructureJsonLocation(ResourceLocation id) {
-        return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "worldgen/structure/" + id.getPath() + ".json");
+    private static Identifier toStructureJsonLocation(Identifier id) {
+        return Identifier.fromNamespaceAndPath(id.getNamespace(), "worldgen/structure/" + id.getPath() + ".json");
     }
 
-    private static ResourceLocation toPoolJsonLocation(ResourceLocation id) {
-        return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "worldgen/template_pool/" + id.getPath() + ".json");
+    private static Identifier toPoolJsonLocation(Identifier id) {
+        return Identifier.fromNamespaceAndPath(id.getNamespace(), "worldgen/template_pool/" + id.getPath() + ".json");
     }
 
-    private static ResourceLocation toTemplateLocation(ResourceLocation id) {
-        return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "structures/" + id.getPath() + ".nbt");
+    private static Identifier toTemplateLocation(Identifier id) {
+        return Identifier.fromNamespaceAndPath(id.getNamespace(), "structures/" + id.getPath() + ".nbt");
     }
 
     private static String getString(JsonObject object, String key) {
@@ -1040,9 +1053,9 @@ public final class StructureIndexExporter {
         return object.getAsJsonArray(key);
     }
 
-    private static ResourceLocation getResourceLocation(JsonObject object, String key) {
+    private static Identifier getIdentifier(JsonObject object, String key) {
         String value = getString(object, key);
-        return value.isBlank() ? null : ResourceLocation.tryParse(value);
+        return value.isBlank() ? null : Identifier.tryParse(value);
     }
 
     private static final class TemplateScanResult {
@@ -1213,7 +1226,7 @@ public final class StructureIndexExporter {
                 if (!(value instanceof EntityType<?> entityType)) {
                     return "";
                 }
-                ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(entityType);
+                Identifier entityId = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
                 return entityId != null ? entityId.toString() : "";
             } catch (Exception exception) {
                 return "";

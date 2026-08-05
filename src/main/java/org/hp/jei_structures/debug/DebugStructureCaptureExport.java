@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import org.hp.jei_structures.data.StructureIndexCache;
 
@@ -22,7 +22,7 @@ public final class DebugStructureCaptureExport {
     private DebugStructureCaptureExport() {
     }
 
-    public static void writeCurrentStructureFiles(Path structureToMobsRoot, Path structureLootBindingsRoot, ResourceLocation structureId, String aggregateStructureId, Set<String> mobIds, Collection<JsonObject> lootBindingObjects) throws Exception {
+    public static void writeCurrentStructureFiles(Path structureToMobsRoot, Path structureLootBindingsRoot, Identifier structureId, String aggregateStructureId, Set<String> mobIds, Collection<JsonObject> lootBindingObjects) throws Exception {
         if (structureId == null || aggregateStructureId == null || structureToMobsRoot == null || structureLootBindingsRoot == null) {
             return;
         }
@@ -69,7 +69,7 @@ public final class DebugStructureCaptureExport {
         String safeReason = reason != null && !reason.isBlank() ? reason : "unknown_reason";
         String safeDimension = levelId != null && !levelId.isBlank()
                 ? levelId
-                : levelKey != null ? levelKey.location().toString() : "";
+                : levelKey != null ? levelKey.identifier().toString() : "";
         BlockPos safeOrigin = origin != null ? origin : BlockPos.ZERO;
         return new FailureEntryData(
                 structureId != null ? structureId : "",
@@ -101,7 +101,7 @@ public final class DebugStructureCaptureExport {
         }
     }
 
-    public static Path buildStructureFilePath(Path root, ResourceLocation structureId) {
+    public static Path buildStructureFilePath(Path root, Identifier structureId) {
         return root
                 .resolve(structureId.getNamespace())
                 .resolve(structureId.getPath().replace("/", "__") + ".json");

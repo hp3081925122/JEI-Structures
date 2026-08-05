@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.hp.jei_structures.JeiStructures;
@@ -30,7 +30,7 @@ public final class StructureSpecialInfoLoader {
 
     private static void loadDirectory(ResourceManager resourceManager, String root, boolean entity, StructureSpecialInfoData data) {
         try {
-            Map<ResourceLocation, Resource> resources = resourceManager.listResources(root, location -> location.getPath().endsWith(".json"));
+            Map<Identifier, Resource> resources = resourceManager.listResources(root, location -> location.getPath().endsWith(".json"));
             resources.keySet().stream()
                     .sorted()
                     .forEach(location -> readResource(resourceManager, location, entity, data));
@@ -39,7 +39,7 @@ public final class StructureSpecialInfoLoader {
         }
     }
 
-    private static void readResource(ResourceManager resourceManager, ResourceLocation location, boolean entity, StructureSpecialInfoData data) {
+    private static void readResource(ResourceManager resourceManager, Identifier location, boolean entity, StructureSpecialInfoData data) {
         try {
             Optional<Resource> resource = resourceManager.getResource(location);
             if (resource.isEmpty()) {

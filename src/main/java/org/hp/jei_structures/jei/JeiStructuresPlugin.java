@@ -9,12 +9,11 @@ import mezz.jei.api.registration.IAdvancedRegistration;
 import mezz.jei.api.registration.IModIngredientRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.fml.ModList;
+import net.neoforged.fml.ModList;
 import org.hp.jei_structures.JeiStructures;
-import org.hp.jei_structures.compat.EmiStructureRecipeOpener;
 import org.hp.jei_structures.data.StructureIndexCache;
 import org.hp.jei_structures.data.StructureIndexCacheLoader;
 
@@ -44,17 +43,17 @@ public final class JeiStructuresPlugin implements IModPlugin {
         thread.setPriority(Thread.MIN_PRIORITY);
         return thread;
     });
-    private final ResourceLocation pluginId = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, "plugin");
+    private final Identifier pluginId = Identifier.fromNamespaceAndPath(JeiStructures.MODID, "plugin");
 
     @Override
-    public ResourceLocation getPluginUid() {
+    public Identifier getPluginUid() {
         return pluginId;
     }
 
     @Override
     public void registerIngredients(IModIngredientRegistration registration) {
         List<StructureBiomeIcon> biomes = buildBiomeIngredients(StructureIndexCacheLoader.load());
-        registration.register(BiomeIngredient.INSTANCE, biomes, BiomeIngredient.INSTANCE, BiomeIngredient.INSTANCE);
+        registration.register(BiomeIngredient.INSTANCE, biomes, BiomeIngredient.INSTANCE, BiomeIngredient.INSTANCE, StructureBiomeIcon.CODEC);
     }
 
     @Override
@@ -102,9 +101,6 @@ public final class JeiStructuresPlugin implements IModPlugin {
             JeiStructures.LOGGER.debug("Cannot open current structure recipe because it is not present in the client cache: {}", structureId);
             return false;
         }
-        if (ModList.get().isLoaded("emi") && EmiStructureRecipeOpener.open(matchedRecipes.get(0))) {
-            return true;
-        }
         IJeiRuntime currentRuntime = runtime;
         StructureRecipeCategory currentCategory = category;
         if (currentRuntime == null || currentCategory == null) {
@@ -149,7 +145,7 @@ public final class JeiStructuresPlugin implements IModPlugin {
     }
 
     private static List<StructureBiomeIcon> buildBiomeIngredients(StructureIndexCache cache) {
-        Map<ResourceLocation, List<String>> biomeDimensions = new LinkedHashMap<>();
+        Map<Identifier, List<String>> biomeDimensions = new LinkedHashMap<>();
         for (StructureIndexCache.StructureEntry entry : cache.structures) {
             addBiomeIds(biomeDimensions, entry.resolvedGenerationBiomes, entry.generationBiomeDimensions);
             addBiomeIds(biomeDimensions, entry.generationBiomes, entry.generationBiomeDimensions);
@@ -159,12 +155,12 @@ public final class JeiStructuresPlugin implements IModPlugin {
                 .toList();
     }
 
-    private static void addBiomeIds(Map<ResourceLocation, List<String>> biomeDimensions, List<String> rawIds, Map<String, List<String>> dimensionsByBiome) {
+    private static void addBiomeIds(Map<Identifier, List<String>> biomeDimensions, List<String> rawIds, Map<String, List<String>> dimensionsByBiome) {
         for (String rawId : rawIds) {
             if (rawId == null || rawId.isBlank() || rawId.startsWith("#")) {
                 continue;
             }
-            ResourceLocation id = ResourceLocation.tryParse(rawId);
+            Identifier id = Identifier.tryParse(rawId);
             if (id != null) {
                 biomeDimensions.putIfAbsent(id, dimensionsByBiome.getOrDefault(rawId, List.of()));
             }

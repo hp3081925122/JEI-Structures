@@ -1,12 +1,12 @@
 package org.hp.jei_structures.client;
 
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import org.hp.jei_structures.JeiStructures;
 
-@Mod.EventBusSubscriber(modid = JeiStructures.MODID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = JeiStructures.MODID, value = Dist.CLIENT)
 public final class JeiStructuresClientModEvents {
 
     private JeiStructuresClientModEvents() {

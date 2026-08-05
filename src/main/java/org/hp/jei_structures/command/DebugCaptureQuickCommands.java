@@ -6,9 +6,9 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import org.hp.jei_structures.debug.DebugStructureCaptureManager;
 import org.hp.jei_structures.debug.DebugStructureCaptureSupport;
@@ -34,14 +34,14 @@ final class DebugCaptureQuickCommands {
                                         .then(Commands.argument("multiplier", IntegerArgumentType.integer(1, DebugStructureCaptureSupport.MAX_SPEED_MULTIPLIER))
                                                 .executes(DebugCaptureQuickCommands::debugCaptureAllExcludeModSpeed)))))
                 .then(Commands.literal("exclude_dimension")
-                        .then(Commands.argument(DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID, ResourceLocationArgument.id())
+                        .then(Commands.argument(DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID, IdentifierArgument.id())
                                 .suggests(DebugCaptureCommandSupport.DIMENSION_ID_SUGGESTIONS)
                                 .executes(DebugCaptureQuickCommands::debugCaptureAllExcludeDimension)
                                 .then(Commands.literal("speed")
                                         .then(Commands.argument("multiplier", IntegerArgumentType.integer(1, DebugStructureCaptureSupport.MAX_SPEED_MULTIPLIER))
                                                 .executes(DebugCaptureQuickCommands::debugCaptureAllExcludeDimensionSpeed))))));
         debugQuick.then(Commands.literal("dimension")
-                .then(Commands.argument("dimension_id", ResourceLocationArgument.id())
+                .then(Commands.argument("dimension_id", IdentifierArgument.id())
                         .suggests(DebugCaptureCommandSupport.DIMENSION_ID_SUGGESTIONS)
                         .executes(DebugCaptureQuickCommands::debugCaptureAllDimension)
                         .then(Commands.literal("speed")
@@ -55,7 +55,7 @@ final class DebugCaptureQuickCommands {
                                 .then(Commands.argument("multiplier", IntegerArgumentType.integer(1, DebugStructureCaptureSupport.MAX_SPEED_MULTIPLIER))
                                         .executes(DebugCaptureQuickCommands::debugCaptureModSpeed)))
                         .then(Commands.literal("dimension")
-                                .then(Commands.argument("dimension_id", ResourceLocationArgument.id())
+                                .then(Commands.argument("dimension_id", IdentifierArgument.id())
                                         .suggests(DebugCaptureCommandSupport.DIMENSION_ID_SUGGESTIONS)
                                         .executes(DebugCaptureQuickCommands::debugCaptureModDimension)
                                         .then(Commands.literal("speed")
@@ -74,14 +74,14 @@ final class DebugCaptureQuickCommands {
                                         .then(Commands.argument("multiplier", IntegerArgumentType.integer(1, DebugStructureCaptureSupport.MAX_SPEED_MULTIPLIER))
                                                 .executes(DebugCaptureQuickCommands::debugCaptureRemainingAllExcludeModSpeed)))))
                 .then(Commands.literal("exclude_dimension")
-                        .then(Commands.argument(DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID, ResourceLocationArgument.id())
+                        .then(Commands.argument(DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID, IdentifierArgument.id())
                                 .suggests(DebugCaptureCommandSupport.DIMENSION_ID_SUGGESTIONS)
                                 .executes(DebugCaptureQuickCommands::debugCaptureRemainingAllExcludeDimension)
                                 .then(Commands.literal("speed")
                                         .then(Commands.argument("multiplier", IntegerArgumentType.integer(1, DebugStructureCaptureSupport.MAX_SPEED_MULTIPLIER))
                                                 .executes(DebugCaptureQuickCommands::debugCaptureRemainingAllExcludeDimensionSpeed)))))
                 .then(Commands.literal("dimension")
-                        .then(Commands.argument("dimension_id", ResourceLocationArgument.id())
+                        .then(Commands.argument("dimension_id", IdentifierArgument.id())
                                 .suggests(DebugCaptureCommandSupport.DIMENSION_ID_SUGGESTIONS)
                                 .executes(DebugCaptureQuickCommands::debugCaptureRemainingDimension)
                                 .then(Commands.literal("speed")
@@ -95,21 +95,21 @@ final class DebugCaptureQuickCommands {
                                         .then(Commands.argument("multiplier", IntegerArgumentType.integer(1, DebugStructureCaptureSupport.MAX_SPEED_MULTIPLIER))
                                                 .executes(DebugCaptureQuickCommands::debugCaptureRemainingModSpeed)))
                                 .then(Commands.literal("dimension")
-                                        .then(Commands.argument("dimension_id", ResourceLocationArgument.id())
+                                        .then(Commands.argument("dimension_id", IdentifierArgument.id())
                                                 .suggests(DebugCaptureCommandSupport.DIMENSION_ID_SUGGESTIONS)
                                                 .executes(DebugCaptureQuickCommands::debugCaptureRemainingModDimension)
                                                 .then(Commands.literal("speed")
                                                         .then(Commands.argument("multiplier", IntegerArgumentType.integer(1, DebugStructureCaptureSupport.MAX_SPEED_MULTIPLIER))
                                                                 .executes(DebugCaptureQuickCommands::debugCaptureRemainingModDimensionSpeed))))))));
         debugQuick.then(Commands.literal("structure")
-                .then(Commands.argument("structure_id", ResourceLocationArgument.id())
+                .then(Commands.argument("structure_id", IdentifierArgument.id())
                         .suggests(DebugCaptureCommandSupport.STRUCTURE_ID_SUGGESTIONS)
                         .executes(DebugCaptureQuickCommands::debugCaptureStructure)
                         .then(Commands.literal("speed")
                                 .then(Commands.argument("multiplier", IntegerArgumentType.integer(1, DebugStructureCaptureSupport.MAX_SPEED_MULTIPLIER))
                                         .executes(DebugCaptureQuickCommands::debugCaptureStructureSpeed)))
                         .then(Commands.literal("dimension")
-                                .then(Commands.argument("dimension_id", ResourceLocationArgument.id())
+                                .then(Commands.argument("dimension_id", IdentifierArgument.id())
                                         .suggests(DebugCaptureCommandSupport.DIMENSION_ID_SUGGESTIONS)
                                         .executes(DebugCaptureQuickCommands::debugCaptureStructureDimension)
                                         .then(Commands.literal("speed")
@@ -131,11 +131,11 @@ final class DebugCaptureQuickCommands {
     }
 
     private static int debugCaptureAllDimension(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureAll(context, 1, ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureAll(context, 1, IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureAllDimensionSpeed(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureAll(context, IntegerArgumentType.getInteger(context, "multiplier"), ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureAll(context, IntegerArgumentType.getInteger(context, "multiplier"), IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureAllExcludeMod(CommandContext<CommandSourceStack> context) {
@@ -147,11 +147,11 @@ final class DebugCaptureQuickCommands {
     }
 
     private static int debugCaptureAllExcludeDimension(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureAll(context, 1, null, null, ResourceLocationArgument.getId(context, DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID));
+        return startDebugCaptureAll(context, 1, null, null, IdentifierArgument.getId(context, DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID));
     }
 
     private static int debugCaptureAllExcludeDimensionSpeed(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureAll(context, IntegerArgumentType.getInteger(context, "multiplier"), null, null, ResourceLocationArgument.getId(context, DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID));
+        return startDebugCaptureAll(context, IntegerArgumentType.getInteger(context, "multiplier"), null, null, IdentifierArgument.getId(context, DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID));
     }
 
     private static int debugCaptureMod(CommandContext<CommandSourceStack> context) {
@@ -163,11 +163,11 @@ final class DebugCaptureQuickCommands {
     }
 
     private static int debugCaptureModDimension(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureMod(context, 1, ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureMod(context, 1, IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureModDimensionSpeed(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureMod(context, IntegerArgumentType.getInteger(context, "multiplier"), ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureMod(context, IntegerArgumentType.getInteger(context, "multiplier"), IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureRemainingAll(CommandContext<CommandSourceStack> context) {
@@ -179,11 +179,11 @@ final class DebugCaptureQuickCommands {
     }
 
     private static int debugCaptureRemainingDimension(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureRemainingAll(context, 1, ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureRemainingAll(context, 1, IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureRemainingDimensionSpeed(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureRemainingAll(context, IntegerArgumentType.getInteger(context, "multiplier"), ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureRemainingAll(context, IntegerArgumentType.getInteger(context, "multiplier"), IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureRemainingAllExcludeMod(CommandContext<CommandSourceStack> context) {
@@ -195,11 +195,11 @@ final class DebugCaptureQuickCommands {
     }
 
     private static int debugCaptureRemainingAllExcludeDimension(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureRemainingAll(context, 1, null, null, ResourceLocationArgument.getId(context, DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID));
+        return startDebugCaptureRemainingAll(context, 1, null, null, IdentifierArgument.getId(context, DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID));
     }
 
     private static int debugCaptureRemainingAllExcludeDimensionSpeed(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureRemainingAll(context, IntegerArgumentType.getInteger(context, "multiplier"), null, null, ResourceLocationArgument.getId(context, DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID));
+        return startDebugCaptureRemainingAll(context, IntegerArgumentType.getInteger(context, "multiplier"), null, null, IdentifierArgument.getId(context, DebugCaptureCommandSupport.ARG_EXCLUDE_DIMENSION_ID));
     }
 
     private static int debugCaptureRemainingMod(CommandContext<CommandSourceStack> context) {
@@ -211,11 +211,11 @@ final class DebugCaptureQuickCommands {
     }
 
     private static int debugCaptureRemainingModDimension(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureRemainingMod(context, 1, ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureRemainingMod(context, 1, IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureRemainingModDimensionSpeed(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureRemainingMod(context, IntegerArgumentType.getInteger(context, "multiplier"), ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureRemainingMod(context, IntegerArgumentType.getInteger(context, "multiplier"), IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureStructure(CommandContext<CommandSourceStack> context) {
@@ -227,18 +227,18 @@ final class DebugCaptureQuickCommands {
     }
 
     private static int debugCaptureStructureDimension(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureStructure(context, 1, ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureStructure(context, 1, IdentifierArgument.getId(context, "dimension_id"));
     }
 
     private static int debugCaptureStructureDimensionSpeed(CommandContext<CommandSourceStack> context) {
-        return startDebugCaptureStructure(context, IntegerArgumentType.getInteger(context, "multiplier"), ResourceLocationArgument.getId(context, "dimension_id"));
+        return startDebugCaptureStructure(context, IntegerArgumentType.getInteger(context, "multiplier"), IdentifierArgument.getId(context, "dimension_id"));
     }
 
-    private static int startDebugCaptureAll(CommandContext<CommandSourceStack> context, int speedMultiplier, ResourceLocation dimensionId) {
+    private static int startDebugCaptureAll(CommandContext<CommandSourceStack> context, int speedMultiplier, Identifier dimensionId) {
         return startDebugCaptureAll(context, speedMultiplier, dimensionId, null, null);
     }
 
-    private static int startDebugCaptureAll(CommandContext<CommandSourceStack> context, int speedMultiplier, ResourceLocation dimensionId, String excludedNamespace, ResourceLocation excludedDimensionId) {
+    private static int startDebugCaptureAll(CommandContext<CommandSourceStack> context, int speedMultiplier, Identifier dimensionId, String excludedNamespace, Identifier excludedDimensionId) {
         ServerPlayer player = DebugCaptureCommandSupport.requirePlayer(context.getSource());
         if (player == null) {
             return 0;
@@ -250,11 +250,11 @@ final class DebugCaptureQuickCommands {
         }
     }
 
-    private static int startDebugCaptureRemainingAll(CommandContext<CommandSourceStack> context, int speedMultiplier, ResourceLocation dimensionId) {
+    private static int startDebugCaptureRemainingAll(CommandContext<CommandSourceStack> context, int speedMultiplier, Identifier dimensionId) {
         return startDebugCaptureRemainingAll(context, speedMultiplier, dimensionId, null, null);
     }
 
-    private static int startDebugCaptureRemainingAll(CommandContext<CommandSourceStack> context, int speedMultiplier, ResourceLocation dimensionId, String excludedNamespace, ResourceLocation excludedDimensionId) {
+    private static int startDebugCaptureRemainingAll(CommandContext<CommandSourceStack> context, int speedMultiplier, Identifier dimensionId, String excludedNamespace, Identifier excludedDimensionId) {
         ServerPlayer player = DebugCaptureCommandSupport.requirePlayer(context.getSource());
         if (player == null) {
             return 0;
@@ -266,7 +266,7 @@ final class DebugCaptureQuickCommands {
         }
     }
 
-    private static int startDebugCaptureMod(CommandContext<CommandSourceStack> context, int speedMultiplier, ResourceLocation dimensionId) {
+    private static int startDebugCaptureMod(CommandContext<CommandSourceStack> context, int speedMultiplier, Identifier dimensionId) {
         ServerPlayer player = DebugCaptureCommandSupport.requirePlayer(context.getSource());
         if (player == null) {
             return 0;
@@ -286,7 +286,7 @@ final class DebugCaptureQuickCommands {
         }
     }
 
-    private static int startDebugCaptureRemainingMod(CommandContext<CommandSourceStack> context, int speedMultiplier, ResourceLocation dimensionId) {
+    private static int startDebugCaptureRemainingMod(CommandContext<CommandSourceStack> context, int speedMultiplier, Identifier dimensionId) {
         ServerPlayer player = DebugCaptureCommandSupport.requirePlayer(context.getSource());
         if (player == null) {
             return 0;
@@ -306,7 +306,7 @@ final class DebugCaptureQuickCommands {
         }
     }
 
-    private static int startDebugCaptureStructure(CommandContext<CommandSourceStack> context, int speedMultiplier, ResourceLocation dimensionId) {
+    private static int startDebugCaptureStructure(CommandContext<CommandSourceStack> context, int speedMultiplier, Identifier dimensionId) {
         ServerPlayer player = DebugCaptureCommandSupport.requirePlayer(context.getSource());
         if (player == null) {
             return 0;
@@ -316,7 +316,7 @@ final class DebugCaptureQuickCommands {
                     context.getSource(),
                     DebugStructureCaptureManager.startSingle(
                             player,
-                            ResourceLocationArgument.getId(context, "structure_id"),
+                            IdentifierArgument.getId(context, "structure_id"),
                             speedMultiplier,
                             dimensionId
                     )
@@ -362,7 +362,7 @@ final class DebugCaptureQuickCommands {
                 snapshot.dimensionCaptureTotal(),
                 DebugCaptureCommandSupport.formatDuration(snapshot.elapsedSeconds()),
                 DebugCaptureCommandSupport.formatDuration(snapshot.structureElapsedSeconds()),
-                snapshot.outputRoot()
+                snapshot.outputRoot() != null ? snapshot.outputRoot().toString() : ""
         ), false);
         return 1;
     }
@@ -373,7 +373,7 @@ final class DebugCaptureQuickCommands {
             context.getSource().sendFailure(Component.translatable("jei_structures.command.debug_capture.stop.idle"));
             return 0;
         }
-        context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.stop.requested", result.outputRoot()), true);
+        context.getSource().sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.stop.requested", result.outputRoot() != null ? result.outputRoot().toString() : ""), true);
         DebugStructureCaptureTypes.TimingSnapshot timingSnapshot = result.timingSnapshot();
         if (timingSnapshot != null) {
             context.getSource().sendSuccess(() -> Component.translatable(

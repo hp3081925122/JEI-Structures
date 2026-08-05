@@ -1,9 +1,9 @@
 package org.hp.jei_structures.client;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.toasts.Toast;
-import net.minecraft.client.gui.components.toasts.ToastComponent;
+import net.minecraft.client.gui.components.toasts.ToastManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
@@ -19,6 +19,8 @@ public final class CurrentStructureToast implements Toast {
     private final Component title;
     private final Component hint;
     private final ItemStack icon;
+    private long visibleTimeMs;
+    private double displayDurationMs = DISPLAY_TIME_MS;
 
     private CurrentStructureToast(String structureId) {
         this.title = Component.translatable("jei_structures.toast.current_structure", StructureTextHelper.getStructureComponent(structureId));
@@ -28,20 +30,28 @@ public final class CurrentStructureToast implements Toast {
 
     public static void show(String structureId) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.getToasts() != null) {
-            minecraft.getToasts().addToast(new CurrentStructureToast(structureId));
+        if (minecraft.getToastManager() != null) {
+            minecraft.getToastManager().addToast(new CurrentStructureToast(structureId));
         }
     }
 
     @Override
-    public Visibility render(GuiGraphics graphics, ToastComponent toastComponent, long timeSinceLastVisible) {
+    public void update(ToastManager manager, long timeSinceLastVisible) {
+        this.visibleTimeMs = timeSinceLastVisible;
+        this.displayDurationMs = DISPLAY_TIME_MS * manager.getNotificationDisplayTimeMultiplier();
+    }
+
+    @Override
+    public Visibility getWantedVisibility() {
+        return visibleTimeMs >= displayDurationMs ? Visibility.HIDE : Visibility.SHOW;
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, Font font, long timeSinceLastVisible) {
         drawBackground(graphics);
-        graphics.renderFakeItem(icon, 8, 8);
-        Font font = toastComponent.getMinecraft().font;
+        graphics.fakeItem(icon, 8, 8);
         drawAdaptive(graphics, font, title, TEXT_X, 7, 0xAA00AA);
         drawAdaptive(graphics, font, hint, TEXT_X, 18, 0x222222);
-        double duration = DISPLAY_TIME_MS * toastComponent.getNotificationDisplayTimeMultiplier();
-        return timeSinceLastVisible >= duration ? Visibility.HIDE : Visibility.SHOW;
     }
 
     @Override
@@ -49,26 +59,17 @@ public final class CurrentStructureToast implements Toast {
         return WIDTH;
     }
 
-    private static void drawAdaptive(GuiGraphics graphics, Font font, Component component, int x, int y, int color) {
+    private static void drawAdaptive(GuiGraphicsExtractor graphics, Font font, Component component, int x, int y, int color) {
         String text = component.getString();
         int width = font.width(text);
         if (width <= TEXT_WIDTH) {
-            graphics.drawString(font, component, x, y, color, false);
+            graphics.text(font, component, x, y, color);
             return;
         }
-        float scale = Mth.clamp((float) TEXT_WIDTH / (float) width, 0.75F, 1.0F);
-        if (scale > 0.75F) {
-            graphics.pose().pushPose();
-            graphics.pose().translate(x, y, 0);
-            graphics.pose().scale(scale, scale, 1.0F);
-            graphics.drawString(font, component, 0, 0, color, false);
-            graphics.pose().popPose();
-            return;
-        }
-        graphics.drawString(font, font.plainSubstrByWidth(text, TEXT_WIDTH - font.width("...")) + "...", x, y, color, false);
+        graphics.text(font, font.plainSubstrByWidth(text, TEXT_WIDTH - font.width("...")) + "...", x, y, color);
     }
 
-    private static void drawBackground(GuiGraphics graphics) {
+    private static void drawBackground(GuiGraphicsExtractor graphics) {
         graphics.fill(0, 0, WIDTH, 32, 0xFF202020);
         graphics.fill(2, 2, WIDTH - 2, 30, 0xFFE8E8E8);
         graphics.fill(4, 4, WIDTH - 4, 28, 0xFFD7D7D7);

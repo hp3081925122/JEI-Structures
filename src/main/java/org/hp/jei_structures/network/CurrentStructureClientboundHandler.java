@@ -1,7 +1,7 @@
 package org.hp.jei_structures.network;
 
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.loading.FMLEnvironment;
 import org.hp.jei_structures.JeiStructures;
 
 public final class CurrentStructureClientboundHandler {
@@ -10,7 +10,7 @@ public final class CurrentStructureClientboundHandler {
     }
 
     public static void handle(String structureId) {
-        if (FMLEnvironment.dist != Dist.CLIENT) {
+        if (FMLEnvironment.getDist() != Dist.CLIENT) {
             return;
         }
         try {

@@ -3,7 +3,7 @@ package org.hp.jei_structures.debug;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
@@ -31,12 +31,12 @@ public final class DebugStructureCaptureTargets {
     private DebugStructureCaptureTargets() {
     }
 
-    public static List<StructureTarget> buildTargets(MinecraftServer server, ResourceLocation singleId, String namespace, ResourceLocation dimensionId, boolean skipReported, String excludedNamespace, ResourceLocation excludedDimensionId) {
+    public static List<StructureTarget> buildTargets(MinecraftServer server, Identifier singleId, String namespace, Identifier dimensionId, boolean skipReported, String excludedNamespace, Identifier excludedDimensionId) {
         StructureIndexCache cache = StructureIndexCacheLoader.load();
         if (cache.structures == null || cache.structures.isEmpty()) {
             return List.of();
         }
-        Registry<Structure> structureRegistry = server.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Registry<Structure> structureRegistry = server.registryAccess().lookupOrThrow(Registries.STRUCTURE);
         List<ResourceKey<Level>> orderedLevels = collectOrderedLevels(server);
         Comparator<ResourceKey<Level>> levelComparator = createLevelComparator(orderedLevels);
         List<StructureTarget> targets = new ArrayList<>();
@@ -47,7 +47,7 @@ public final class DebugStructureCaptureTargets {
             if (entry == null || entry.structureId == null || entry.structureId.isBlank()) {
                 continue;
             }
-            ResourceLocation structureId = ResourceLocation.tryParse(entry.structureId);
+            Identifier structureId = Identifier.tryParse(entry.structureId);
             if (structureId == null) {
                 continue;
             }
@@ -63,7 +63,7 @@ public final class DebugStructureCaptureTargets {
             if (skipReported && reportedStructureIds.contains(structureId.toString())) {
                 continue;
             }
-            Structure structure = structureRegistry.get(structureId);
+            Structure structure = structureRegistry.get(structureId).map(reference -> reference.value()).orElse(null);
             if (structure == null) {
                 continue;
             }
@@ -133,7 +133,7 @@ public final class DebugStructureCaptureTargets {
         return namespace.isBlank() || path.isBlank() ? null : namespace + ":" + path;
     }
 
-    private static List<ResourceKey<Level>> collectCandidateLevels(MinecraftServer server, StructureIndexCache.StructureEntry entry, ResourceLocation dimensionId, ResourceLocation excludedDimensionId, Comparator<ResourceKey<Level>> levelComparator) {
+    private static List<ResourceKey<Level>> collectCandidateLevels(MinecraftServer server, StructureIndexCache.StructureEntry entry, Identifier dimensionId, Identifier excludedDimensionId, Comparator<ResourceKey<Level>> levelComparator) {
         LinkedHashSet<ResourceKey<Level>> candidateLevels = new LinkedHashSet<>();
         if (entry != null && entry.generationBiomeDimensions != null) {
             for (List<String> dimensionIds : entry.generationBiomeDimensions.values()) {
@@ -141,7 +141,7 @@ public final class DebugStructureCaptureTargets {
                     continue;
                 }
                 for (String candidateDimensionId : dimensionIds) {
-                    ResourceLocation location = ResourceLocation.tryParse(candidateDimensionId);
+                    Identifier location = Identifier.tryParse(candidateDimensionId);
                     if (location != null) {
                         ResourceKey<Level> levelKey = ResourceKey.create(Registries.DIMENSION, location);
                         if (server.getLevel(levelKey) != null) {
@@ -191,9 +191,9 @@ public final class DebugStructureCaptureTargets {
         }
         return Comparator
                 .comparingInt((ResourceKey<Level> levelKey) -> levelIndex.getOrDefault(levelKey, Integer.MAX_VALUE))
-                .thenComparing(levelKey -> levelKey.location().toString(), String.CASE_INSENSITIVE_ORDER);
+                .thenComparing(levelKey -> levelKey.identifier().toString(), String.CASE_INSENSITIVE_ORDER);
     }
 
-    public record StructureTarget(StructureIndexCache.StructureEntry entry, ResourceLocation structureId, Structure structure, int attemptCount, List<ResourceKey<Level>> candidateLevels, ResourceKey<Level> primaryLevel) {
+    public record StructureTarget(StructureIndexCache.StructureEntry entry, Identifier structureId, Structure structure, int attemptCount, List<ResourceKey<Level>> candidateLevels, ResourceKey<Level> primaryLevel) {
     }
 }

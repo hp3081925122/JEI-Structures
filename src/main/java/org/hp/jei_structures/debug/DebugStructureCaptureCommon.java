@@ -1,7 +1,7 @@
 package org.hp.jei_structures.debug;
 
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public final class DebugStructureCaptureCommon {
 
@@ -30,7 +30,7 @@ public final class DebugStructureCaptureCommon {
         return DebugStructureCaptureSupport.getStructureDisplayComponent(structureId);
     }
 
-    public static Component getStructureDisplayComponent(ResourceLocation structureId) {
+    public static Component getStructureDisplayComponent(Identifier structureId) {
         return DebugStructureCaptureSupport.getStructureDisplayComponent(structureId);
     }
 }

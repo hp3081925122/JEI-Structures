@@ -2,17 +2,16 @@ package org.hp.jei_structures.tracker;
 
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
-import net.minecraftforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.hp.jei_structures.data.StructureIndexCache;
 import org.hp.jei_structures.data.StructureIndexCacheLoader;
-import org.hp.jei_structures.network.CurrentStructureMessage;
-import org.hp.jei_structures.network.JeiStructuresNetwork;
+import org.hp.jei_structures.network.CurrentStructurePayload;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,14 +50,14 @@ public final class CurrentStructureTracker {
         if (cache == cachedSource) {
             return cachedStructures;
         }
-        Registry<Structure> registry = server.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Registry<Structure> registry = server.registryAccess().lookupOrThrow(Registries.STRUCTURE);
         List<TrackedStructure> structures = new ArrayList<>();
         for (StructureIndexCache.StructureEntry entry : cache.structures) {
-            ResourceLocation id = ResourceLocation.tryParse(entry.structureId);
+            Identifier id = Identifier.tryParse(entry.structureId);
             if (id == null) {
                 continue;
             }
-            Structure structure = registry.get(id);
+            Structure structure = registry.get(id).map(reference -> reference.value()).orElse(null);
             if (structure != null) {
                 structures.add(new TrackedStructure(entry.structureId, structure));
             }
@@ -78,7 +77,7 @@ public final class CurrentStructureTracker {
                 : "";
         if (!current.equals(previous)) {
             LAST_SENT_STRUCTURE.put(player.getUUID(), current);
-            JeiStructuresNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CurrentStructureMessage(current));
+            PacketDistributor.sendToPlayer(player, new CurrentStructurePayload(current));
         }
     }
 

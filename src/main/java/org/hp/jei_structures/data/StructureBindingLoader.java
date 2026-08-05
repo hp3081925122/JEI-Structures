@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.hp.jei_structures.JeiStructures;
@@ -172,9 +172,9 @@ public final class StructureBindingLoader {
 
     private static List<JsonObject> readJsonObjects(ResourceManager resourceManager, String dirName) {
         List<JsonObject> result = new ArrayList<>();
-        ResourceLocation root = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, BINDINGS_ROOT + "/" + dirName);
+        Identifier root = Identifier.fromNamespaceAndPath(JeiStructures.MODID, BINDINGS_ROOT + "/" + dirName);
         try {
-            Map<ResourceLocation, Resource> resources = resourceManager.listResources(BINDINGS_ROOT + "/" + dirName, path -> path.getPath().endsWith(".json"));
+            Map<Identifier, Resource> resources = resourceManager.listResources(BINDINGS_ROOT + "/" + dirName, path -> path.getPath().endsWith(".json"));
             resources.keySet().stream()
                     .sorted()
                     .forEach(location -> readJsonResource(resourceManager, location, result));
@@ -187,7 +187,7 @@ public final class StructureBindingLoader {
     private static List<JsonObject> readReportJsonObjects(ResourceManager resourceManager, String dirName) {
         List<JsonObject> result = new ArrayList<>();
         try {
-            Map<ResourceLocation, Resource> resources = resourceManager.listResources("reports", path -> isReportBindingPath(path, dirName));
+            Map<Identifier, Resource> resources = resourceManager.listResources("reports", path -> isReportBindingPath(path, dirName));
             resources.keySet().stream()
                     .sorted()
                     .forEach(location -> readJsonResource(resourceManager, location, result));
@@ -213,7 +213,7 @@ public final class StructureBindingLoader {
         return result;
     }
 
-    private static boolean isReportBindingPath(ResourceLocation location, String dirName) {
+    private static boolean isReportBindingPath(Identifier location, String dirName) {
         if (location == null || location.getPath() == null || !location.getPath().endsWith(".json")) {
             return false;
         }
@@ -221,7 +221,7 @@ public final class StructureBindingLoader {
         return segments.length >= 5 && "reports".equals(segments[0]) && dirName.equals(segments[2]);
     }
 
-    private static void readJsonResource(ResourceManager resourceManager, ResourceLocation location, List<JsonObject> result) {
+    private static void readJsonResource(ResourceManager resourceManager, Identifier location, List<JsonObject> result) {
         try {
             Optional<Resource> resource = resourceManager.getResource(location);
             if (resource.isEmpty()) {

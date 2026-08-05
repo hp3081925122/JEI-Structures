@@ -31,7 +31,7 @@ public final class CurrentStructureClientState {
             if (!JeiStructuresPlugin.openStructureRecipe(currentStructureId)) {
                 Minecraft minecraft = Minecraft.getInstance();
                 if (minecraft.player != null) {
-                    minecraft.player.displayClientMessage(Component.translatable("jei_structures.toast.jei_unavailable").withStyle(ChatFormatting.RED), true);
+                    minecraft.player.sendOverlayMessage(Component.translatable("jei_structures.toast.jei_unavailable").withStyle(ChatFormatting.RED));
                 }
             }
         }

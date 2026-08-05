@@ -2,11 +2,11 @@ package org.hp.jei_structures.data;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public final class StoredItemNbtReader {
@@ -42,18 +42,22 @@ public final class StoredItemNbtReader {
             return null;
         }
         StructureIndexCache.ItemStackSnapshot snapshot = new StructureIndexCache.ItemStackSnapshot();
-        if (itemTag.contains("id", Tag.TAG_STRING)) {
-            snapshot.itemId = itemTag.getString("id");
+        if (itemTag.contains("id")) {
+            snapshot.itemId = itemTag.getStringOr("id", "");
         }
         snapshot.stackTag = itemTag.toString();
         return ItemStackSnapshotHelper.isEmptySnapshot(snapshot) ? null : snapshot;
     }
 
     private static void collectStoredItemSnapshotsFromList(CompoundTag blockEntity, String key, List<StructureIndexCache.ItemStackSnapshot> items) {
-        if (!blockEntity.contains(key, Tag.TAG_LIST)) {
+        if (!blockEntity.contains(key)) {
             return;
         }
-        ListTag listTag = blockEntity.getList(key, Tag.TAG_COMPOUND);
+        Optional<ListTag> optionalListTag = blockEntity.getList(key);
+        if (optionalListTag.isEmpty()) {
+            return;
+        }
+        ListTag listTag = optionalListTag.get();
         for (int index = 0; index < listTag.size(); index++) {
             if (listTag.get(index) instanceof CompoundTag itemTag) {
                 addStoredItemSnapshot(itemTag, items);
@@ -62,10 +66,10 @@ public final class StoredItemNbtReader {
     }
 
     private static void collectStoredItemSnapshotFromCompound(CompoundTag blockEntity, String key, List<StructureIndexCache.ItemStackSnapshot> items) {
-        if (!blockEntity.contains(key, Tag.TAG_COMPOUND)) {
+        if (!blockEntity.contains(key)) {
             return;
         }
-        addStoredItemSnapshot(blockEntity.getCompound(key), items);
+        blockEntity.getCompound(key).ifPresent(itemTag -> addStoredItemSnapshot(itemTag, items));
     }
 
     private static void addStoredItemSnapshot(CompoundTag itemTag, List<StructureIndexCache.ItemStackSnapshot> items) {

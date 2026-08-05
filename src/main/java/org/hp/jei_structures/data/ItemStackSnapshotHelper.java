@@ -1,11 +1,10 @@
 package org.hp.jei_structures.data;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 public final class ItemStackSnapshotHelper {
 
@@ -17,27 +16,14 @@ public final class ItemStackSnapshotHelper {
             return null;
         }
         StructureIndexCache.ItemStackSnapshot snapshot = new StructureIndexCache.ItemStackSnapshot();
-        ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        Identifier itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
         snapshot.itemId = itemId != null ? itemId.toString() : "";
-        try {
-            CompoundTag tag = stack.save(new CompoundTag());
-            if (tag != null && !tag.isEmpty()) {
-                snapshot.stackTag = tag.toString();
-            }
-        } catch (Exception ignored) {
-        }
         return isEmptySnapshot(snapshot) ? null : snapshot;
     }
 
     public static ItemStack parseSnapshot(StructureIndexCache.ItemStackSnapshot snapshot) {
         if (snapshot == null) {
             return ItemStack.EMPTY;
-        }
-        if (snapshot.stackTag != null && !snapshot.stackTag.isBlank()) {
-            try {
-                return ItemStack.of(net.minecraft.nbt.TagParser.parseTag(snapshot.stackTag));
-            } catch (Exception ignored) {
-            }
         }
         return createFallbackStack(snapshot.itemId);
     }
@@ -53,8 +39,8 @@ public final class ItemStackSnapshotHelper {
     }
 
     public static ItemStack createFallbackStack(String itemId) {
-        ResourceLocation id = ResourceLocation.tryParse(itemId);
-        Item item = id == null ? null : ForgeRegistries.ITEMS.getValue(id);
+        Identifier id = Identifier.tryParse(itemId);
+        Item item = id == null ? null : BuiltInRegistries.ITEM.get(id).map(reference -> reference.value()).orElse(null);
         if (item == null || item == Items.AIR) {
             return ItemStack.EMPTY;
         }

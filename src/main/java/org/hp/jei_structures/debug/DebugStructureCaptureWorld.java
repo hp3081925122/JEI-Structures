@@ -30,7 +30,7 @@ public final class DebugStructureCaptureWorld {
             addBoundingBoxChunks(fallbackBox, chunkSet, bounds);
         }
         List<ChunkPos> chunks = new ArrayList<>(chunkSet);
-        chunks.sort(Comparator.comparingInt((ChunkPos chunkPos) -> chunkPos.x).thenComparingInt(chunkPos -> chunkPos.z));
+        chunks.sort(Comparator.comparingInt((ChunkPos chunkPos) -> chunkPos.x()).thenComparingInt(chunkPos -> chunkPos.z()));
         if (!bounds.valid()) {
             ChunkPos zero = new ChunkPos(0, 0);
             return new ChunkCoverage(List.of(), zero, 2);
@@ -52,10 +52,10 @@ public final class DebugStructureCaptureWorld {
             }
         }
         List<ChunkPos> orderedChunks = new ArrayList<>(chunkSet);
-        orderedChunks.sort(Comparator.comparingInt((ChunkPos chunkPos) -> chunkPos.x).thenComparingInt(chunkPos -> chunkPos.z));
+        orderedChunks.sort(Comparator.comparingInt((ChunkPos chunkPos) -> chunkPos.x()).thenComparingInt(chunkPos -> chunkPos.z()));
         ChunkBounds bounds = new ChunkBounds();
         for (ChunkPos chunkPos : orderedChunks) {
-            bounds.include(chunkPos.x, chunkPos.z);
+            bounds.include(chunkPos.x(), chunkPos.z());
         }
         if (!bounds.valid()) {
             ChunkPos zero = new ChunkPos(0, 0);

@@ -3,20 +3,19 @@ package org.hp.jei_structures.jei;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
-import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
-import mezz.jei.api.gui.ingredient.IRecipeSlotDrawablesView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.helpers.IGuiHelper;
+import mezz.jei.api.gui.widgets.IRecipeExtrasBuilder;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.hp.jei_structures.JeiStructures;
@@ -28,22 +27,16 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     public static final RecipeType<StructureRecipe> TYPE = RecipeType.create(JeiStructures.MODID, "structure_index", StructureRecipe.class);
 
-    private static final int WIDTH = 200;
-    private static final int HEIGHT = 200;
-    private static final int CONTENT_X = 6;
-    private static final int CONTENT_Y = 14;
-    private static final int CONTENT_WIDTH = 198;
-    private static final int CONTENT_HEIGHT = 188;
-    private static final int CONTENT_PADDING_Y = 5;
-    private static final int TITLE_CENTER_Y = 6;
-    private static final int FIXED_TITLE_Y = 12;
+    private static final int WIDTH = 188;
+    private static final int HEIGHT = 170;
+    private static final int CONTENT_X = 4;
+    private static final int CONTENT_Y = 16;
+    private static final int CONTENT_WIDTH = 180;
+    private static final int CONTENT_HEIGHT = 150;
+    private static final int CONTENT_PADDING_Y = 4;
     private static final int SLOT_SPACING = 18;
-    private static final int GRID_COLUMNS = 6;
     private static final int SCROLLBAR_EXTRA_WIDTH = 16;
-    private static final int CARD_MARGIN = 4;
-    private static final int HEADER_DIVIDER_INSET = 12;
-    private static final int HEADER_CONTENT_GAP = 6;
-    private static final int CARD_CONTENT_INSET_X = 11;
+    private static final int CONTENT_INSET_X = 4;
 
     private final IDrawable icon;
 
@@ -61,7 +54,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     @Override
-    public ResourceLocation getRegistryName(StructureRecipe recipe) {
+    public Identifier getRegistryName(StructureRecipe recipe) {
         return recipe != null ? recipe.getId() : null;
     }
 
@@ -89,7 +82,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     public void setRecipe(IRecipeLayoutBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
         for (StructureRecipe.ContentBlock block : recipe.getContentBlocks()) {
             for (StructureRecipe.SlotDisplay slot : block.slots()) {
-                var slotBuilder = builder.addSlot(slot.role(), getCardContentInsetX(), 0)
+                var slotBuilder = builder.addSlot(slot.role(), 0, 0)
                         .setStandardSlotBackground()
                         .setSlotName(slot.slotName())
                         .addRichTooltipCallback((IRecipeSlotView recipeSlotView, ITooltipBuilder tooltip) -> {
@@ -117,58 +110,40 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     @Override
-    public void draw(StructureRecipe recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
-        drawPanel(guiGraphics, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT);
-        drawFixedHeader(recipe, guiGraphics, CONTENT_X, CONTENT_Y);
-    }
-
-    @Override
-    public void createRecipeExtras(mezz.jei.api.gui.widgets.IRecipeExtrasBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
-        IRecipeSlotDrawablesView recipeSlots = builder.getRecipeSlots();
-        if (recipeSlots == null) {
-            JeiStructures.LOGGER.debug("Skipped JEI structure recipe extras because recipe slots are unavailable for builder {}", builder.getClass().getName());
-            return;
-        }
-        List<IRecipeSlotDrawable> contentSlots = recipeSlots.getSlots();
-        StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT, contentSlots);
-        builder.addSlottedWidget(widget, contentSlots);
+    public void createRecipeExtras(IRecipeExtrasBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
+        List<mezz.jei.api.gui.ingredient.IRecipeSlotDrawable> slots = builder.getRecipeSlots().getSlots();
+        StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT, slots);
+        builder.addSlottedWidget(widget, slots);
         builder.addInputHandler(widget);
     }
 
-    static void drawScrollableContents(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
+    @Override
+    public void draw(StructureRecipe recipe, IRecipeSlotsView recipeSlotsView, GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
+        Font font = Minecraft.getInstance().font;
+        guiGraphics.text(font, recipe.getDisplayName(), CONTENT_X, 4, 0xFF2B2B2B, false);
+        drawPanel(guiGraphics, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT);
+    }
+
+    static void drawScrollableContents(StructureRecipe recipe, GuiGraphicsExtractor guiGraphics, int x, int y) {
         Font font = Minecraft.getInstance().font;
         int currentY = y + CONTENT_PADDING_Y;
-        int mergedCardX = x + getCardLeftInset();
-        int mergedCardY = currentY;
-        int mergedCardWidth = getCardWidth();
-        int mergedCardHeight = recipe.getMergedContentHeight();
-        drawInnerCard(guiGraphics, mergedCardX, mergedCardY, mergedCardWidth, mergedCardHeight);
-
         List<StructureRecipe.ContentBlock> blocks = recipe.getContentBlocks();
-        currentY = mergedCardY;
-        for (int index = 0; index < blocks.size(); index++) {
-            StructureRecipe.ContentBlock block = blocks.get(index);
-            int blockHeight = block.getHeight(recipe) - block.getTrailingSpacing(recipe);
+        for (StructureRecipe.ContentBlock block : blocks) {
             int blockY = currentY + block.getTitleStartY(recipe);
             if (block.hasTitle()) {
                 int titleColor = getTitleColor(block);
                 int titleLineY = blockY;
                 for (Component titleLine : block.getWrappedTitle(recipe)) {
-                    guiGraphics.drawString(font, titleLine, x + getCardContentInsetX(), titleLineY, resolveTextColor(titleLine, titleColor), false);
+                    guiGraphics.text(font, titleLine, x + CONTENT_INSET_X, titleLineY, resolveTextColor(titleLine, titleColor), false);
                     titleLineY += recipe.getTextLineHeight();
                 }
-                int titleLineStartX = x + getCardContentInsetX();
-                int titleLineEndX = x + getContentRightEdge() - getCardContentInsetX();
-                int lineColor = getTitleDividerColor(block);
-                int dividerY = currentY + block.getTitleDividerY(recipe);
-                guiGraphics.fill(titleLineStartX, dividerY, titleLineEndX, dividerY + 1, lineColor);
             }
             blockY = currentY + block.getTextStartY(recipe);
             int groupIndex = 0;
             for (List<Component> wrappedGroup : block.getWrappedLineGroups(recipe)) {
                 for (Component wrappedLine : wrappedGroup) {
                     int textColor = getTextColor(block, groupIndex);
-                    guiGraphics.drawString(font, wrappedLine, x + getCardContentInsetX(), blockY, resolveTextColor(wrappedLine, textColor), false);
+                    guiGraphics.text(font, wrappedLine, x + CONTENT_INSET_X, blockY, resolveTextColor(wrappedLine, textColor), false);
                     blockY += recipe.getTextLineHeight();
                 }
                 blockY += block.getExtraLineGapAfter(groupIndex);
@@ -176,7 +151,6 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             }
             currentY += block.getHeight(recipe);
         }
-
     }
 
     static List<SlotPlacement> getSlotPlacements(StructureRecipe recipe) {
@@ -187,9 +161,9 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             int ingredientCount = block.slots().size();
             if (ingredientCount > 0) {
                 for (int index = 0; index < ingredientCount; index++) {
-                    int column = index % GRID_COLUMNS;
-                    int row = index / GRID_COLUMNS;
-                    int slotX = getCardContentInsetX() + column * SLOT_SPACING;
+                    int column = index % recipe.getGridColumns();
+                    int row = index / recipe.getGridColumns();
+                    int slotX = CONTENT_INSET_X + column * SLOT_SPACING;
                     int slotY = blockY + row * SLOT_SPACING + 1;
                     placements.add(new SlotPlacement(slotX, slotY));
                 }
@@ -200,15 +174,11 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     static int getTextWrapPixelWidth() {
-        return getContentWidthWithoutScrollbar() - getCardContentInsetX() * 2;
+        return CONTENT_WIDTH - SCROLLBAR_EXTRA_WIDTH - CONTENT_INSET_X * 2;
     }
 
     static int getHeaderContentOffset(StructureRecipe recipe) {
         return CONTENT_PADDING_Y;
-    }
-
-    static int getCardContentInsetX() {
-        return CARD_CONTENT_INSET_X;
     }
 
     static int getScrollbarWidth() {
@@ -231,23 +201,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         return CONTENT_HEIGHT;
     }
 
-    private static int getContentWidthWithoutScrollbar() {
-        return CONTENT_WIDTH - getScrollbarWidth();
-    }
-
-    private static int getContentRightEdge() {
-        return getContentWidthWithoutScrollbar();
-    }
-
-    private static int getCardWidth() {
-        return getContentWidthWithoutScrollbar() - getCardLeftInset() * 2;
-    }
-
-    private static int getCardLeftInset() {
-        return CARD_MARGIN;
-    }
-
-    static void drawPanel(GuiGraphics guiGraphics, int x, int y, int width, int height) {
+    static void drawPanel(GuiGraphicsExtractor guiGraphics, int x, int y, int width, int height) {
         guiGraphics.fill(x, y, x + width, y + height, 0xFFE3E3E3);
         guiGraphics.fill(x, y, x + width, y + 1, 0xFFF8F8F8);
         guiGraphics.fill(x, y, x + 1, y + height, 0xFFF8F8F8);
@@ -264,18 +218,6 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         };
     }
 
-    private static int getTitleDividerColor(StructureRecipe.ContentBlock block) {
-        if (block.isMergedItemOnlyBlock()) {
-            return 0xFF686868;
-        }
-        return switch (block.blockType()) {
-            case SUMMARY -> 0xFFD8D8D8;
-            case LEAD_DETAIL -> 0xFF686868;
-            case TAIL -> 0xFFD7D7D7;
-            case DEFAULT -> 0xFFECECEC;
-        };
-    }
-
     private static int getTextColor(StructureRecipe.ContentBlock block, int groupIndex) {
         return switch (block.blockType()) {
             case SUMMARY -> groupIndex < 2 ? 0xFF717171 : 0xFF929292;
@@ -283,33 +225,6 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             case TAIL -> 0xFF777777;
             case DEFAULT -> 0xFF646464;
         };
-    }
-
-    private static void drawInnerCard(GuiGraphics guiGraphics, int x, int y, int width, int height) {
-        guiGraphics.fill(x, y, x + width, y + height, 0xFFFBFBFB);
-        guiGraphics.fill(x, y, x + width, y + 1, 0xFFFFFFFF);
-        guiGraphics.fill(x, y, x + 1, y + height, 0xFFFFFFFF);
-        guiGraphics.fill(x + width - 1, y, x + width, y + height, 0xFFD5D5D5);
-        guiGraphics.fill(x, y + height - 1, x + width, y + height, 0xFFD5D5D5);
-    }
-
-    private static void drawCenteredString(GuiGraphics guiGraphics, Font font, Component text, int centerX, int y, int color) {
-        int width = font.width(text);
-        guiGraphics.drawString(font, text, centerX - width / 2, y + TITLE_CENTER_Y - font.lineHeight / 2, resolveTextColor(text, color), false);
-    }
-
-    static void drawFixedHeader(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
-        Font font = Minecraft.getInstance().font;
-        int titleY = y - FIXED_TITLE_Y;
-        drawCenteredString(guiGraphics, font, recipe.getDisplayName(), x + getContentRightEdge() / 2, titleY, 0xFF2A2A2A);
-        int dividerY = y - 1;
-        guiGraphics.fill(
-                x + getCardContentInsetX() + HEADER_DIVIDER_INSET,
-                dividerY,
-                x + getContentRightEdge() - getCardContentInsetX() - HEADER_DIVIDER_INSET,
-                dividerY + 1,
-                0xFFDDDDDD
-        );
     }
 
     private static int resolveTextColor(Component text, int fallbackColor) {

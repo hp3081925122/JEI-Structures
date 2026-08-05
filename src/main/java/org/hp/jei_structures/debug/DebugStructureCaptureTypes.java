@@ -1,6 +1,6 @@
 package org.hp.jei_structures.debug;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.nio.file.Path;
 
@@ -9,7 +9,7 @@ public final class DebugStructureCaptureTypes {
     private DebugStructureCaptureTypes() {
     }
 
-    public record StartResult(State state, Path outputRoot, int structureCount, int speedMultiplier, ResourceLocation missingId) {
+    public record StartResult(State state, Path outputRoot, int structureCount, int speedMultiplier, Identifier missingId) {
 
         public static StartResult started(Path outputRoot, int structureCount, int speedMultiplier) {
             return new StartResult(State.STARTED, outputRoot, structureCount, speedMultiplier, null);
@@ -23,7 +23,7 @@ public final class DebugStructureCaptureTypes {
             return new StartResult(State.EMPTY, null, 0, 0, null);
         }
 
-        public static StartResult missing(ResourceLocation missingId) {
+        public static StartResult missing(Identifier missingId) {
             return new StartResult(State.MISSING, null, 0, 0, missingId);
         }
 

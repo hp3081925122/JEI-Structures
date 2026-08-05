@@ -1,7 +1,7 @@
 package org.hp.jei_structures.debug;
 
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public final class DebugStructureCaptureSupport {
 
@@ -11,7 +11,7 @@ public final class DebugStructureCaptureSupport {
     }
 
     public static Component getStructureDisplayComponent(String structureId) {
-        ResourceLocation id = structureId == null || structureId.isBlank() ? null : ResourceLocation.tryParse(structureId);
+        Identifier id = structureId == null || structureId.isBlank() ? null : Identifier.tryParse(structureId);
         if (id == null) {
             return structureId == null || structureId.isBlank()
                     ? Component.translatable("jei_structures.common.unknown")
@@ -21,7 +21,7 @@ public final class DebugStructureCaptureSupport {
         return Component.translatableWithFallback(translationKey, id.toString());
     }
 
-    public static Component getStructureDisplayComponent(ResourceLocation structureId) {
+    public static Component getStructureDisplayComponent(Identifier structureId) {
         return getStructureDisplayComponent(structureId != null ? structureId.toString() : "");
     }
 }

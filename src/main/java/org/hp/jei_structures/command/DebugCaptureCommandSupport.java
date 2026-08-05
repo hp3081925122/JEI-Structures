@@ -5,7 +5,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import org.hp.jei_structures.JeiStructures;
@@ -20,7 +20,7 @@ final class DebugCaptureCommandSupport {
 
     static final SuggestionProvider<CommandSourceStack> DIMENSION_ID_SUGGESTIONS = (context, builder) ->
             SharedSuggestionProvider.suggestResource(
-                    context.getSource().getServer().levelKeys().stream().map(key -> key.location()),
+                    context.getSource().getServer().levelKeys().stream().map(key -> key.identifier()),
                     builder
             );
 
@@ -47,7 +47,7 @@ final class DebugCaptureCommandSupport {
     static int handleDebugCaptureStart(CommandSourceStack source, DebugStructureCaptureTypes.StartResult result) {
         return switch (result.state()) {
             case STARTED -> {
-                source.sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.start", result.structureCount(), result.speedMultiplier(), result.outputRoot()), true);
+                source.sendSuccess(() -> Component.translatable("jei_structures.command.debug_capture.start", result.structureCount(), result.speedMultiplier(), result.outputRoot().toString()), true);
                 yield 1;
             }
             case BUSY -> {
@@ -59,7 +59,7 @@ final class DebugCaptureCommandSupport {
                 yield 0;
             }
             case MISSING -> {
-                source.sendFailure(Component.translatable("jei_structures.command.debug_capture.missing", result.missingId()));
+                source.sendFailure(Component.translatable("jei_structures.command.debug_capture.missing", result.missingId() != null ? result.missingId().toString() : ""));
                 yield 0;
             }
         };
@@ -88,25 +88,25 @@ final class DebugCaptureCommandSupport {
         return String.format(java.util.Locale.ROOT, "%02d:%02d:%02d", hours, minutes, seconds);
     }
 
-    static Iterable<ResourceLocation> collectSuggestedStructureIds(CommandSourceStack source) {
-        Set<ResourceLocation> structureIds = new LinkedHashSet<>();
+    static Iterable<Identifier> collectSuggestedStructureIds(CommandSourceStack source) {
+        Set<Identifier> structureIds = new LinkedHashSet<>();
         StructureIndexCache cache = StructureIndexCacheLoader.load();
         if (cache.structures != null) {
             for (StructureIndexCache.StructureEntry entry : cache.structures) {
                 if (entry == null || entry.structureId == null || entry.structureId.isBlank()) {
                     continue;
                 }
-                ResourceLocation structureId = ResourceLocation.tryParse(entry.structureId);
+                Identifier structureId = Identifier.tryParse(entry.structureId);
                 if (structureId != null) {
                     structureIds.add(structureId);
                 }
             }
         }
         if (structureIds.isEmpty()) {
-            var registry = source.getServer().registryAccess().registry(Registries.STRUCTURE);
+            var registry = source.getServer().registryAccess().lookup(Registries.STRUCTURE);
             if (registry.isPresent()) {
                 for (Structure structure : registry.get()) {
-                    ResourceLocation structureId = registry.get().getKey(structure);
+                    Identifier structureId = registry.get().getKey(structure);
                     if (structureId != null) {
                         structureIds.add(structureId);
                     }
@@ -118,7 +118,7 @@ final class DebugCaptureCommandSupport {
 
     static Iterable<String> collectSuggestedModIds(CommandSourceStack source) {
         Set<String> modIds = new LinkedHashSet<>();
-        for (ResourceLocation structureId : collectSuggestedStructureIds(source)) {
+        for (Identifier structureId : collectSuggestedStructureIds(source)) {
             if (structureId != null) {
                 modIds.add(structureId.getNamespace());
             }

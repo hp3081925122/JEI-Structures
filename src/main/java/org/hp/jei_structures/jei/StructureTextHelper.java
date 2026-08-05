@@ -3,10 +3,10 @@ package org.hp.jei_structures.jei;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.hp.jei_structures.data.StructureIndexCache;
 
 import java.util.List;
@@ -18,7 +18,7 @@ public final class StructureTextHelper {
     }
 
     public static MutableComponent getStructureComponent(String structureId) {
-        ResourceLocation id = ResourceLocation.tryParse(structureId);
+        Identifier id = Identifier.tryParse(structureId);
         if (id == null) {
             return Component.literal(getFallbackName(structureId));
         }
@@ -37,7 +37,7 @@ public final class StructureTextHelper {
         if (structureId == null || structureId.isBlank()) {
             return getFallbackName(structureId);
         }
-        ResourceLocation id = ResourceLocation.tryParse(structureId);
+        Identifier id = Identifier.tryParse(structureId);
         if (id == null) {
             return getFallbackName(structureId);
         }
@@ -56,7 +56,7 @@ public final class StructureTextHelper {
         if (structureType == null || structureType.isBlank()) {
             return getFallbackName(structureType);
         }
-        ResourceLocation id = ResourceLocation.tryParse(structureType);
+        Identifier id = Identifier.tryParse(structureType);
         if (id == null) {
             return getFallbackName(structureType);
         }
@@ -97,7 +97,7 @@ public final class StructureTextHelper {
         if (biomeId == null || biomeId.isBlank()) {
             return getFallbackName(biomeId);
         }
-        ResourceLocation id = ResourceLocation.tryParse(biomeId);
+        Identifier id = Identifier.tryParse(biomeId);
         if (id != null) {
             String translatedName = translate("biome." + id.getNamespace() + "." + id.getPath().replace('/', '.'));
             if (!translatedName.isBlank()) {
@@ -111,7 +111,7 @@ public final class StructureTextHelper {
         if (dimensionId == null || dimensionId.isBlank()) {
             return getFallbackName(dimensionId);
         }
-        ResourceLocation id = ResourceLocation.tryParse(dimensionId);
+        Identifier id = Identifier.tryParse(dimensionId);
         if (id != null) {
             String translatedName = translate(getDimensionTranslationKey(id));
             if (!translatedName.isBlank()) {
@@ -133,7 +133,7 @@ public final class StructureTextHelper {
         if (biomeId == null || biomeId.isBlank()) {
             return Component.literal(getFallbackName(biomeId));
         }
-        ResourceLocation id = ResourceLocation.tryParse(biomeId);
+        Identifier id = Identifier.tryParse(biomeId);
         if (id == null) {
             return Component.literal(getFallbackName(biomeId));
         }
@@ -175,12 +175,11 @@ public final class StructureTextHelper {
         if (entityId == null || entityId.isBlank()) {
             return getFallbackName(entityId);
         }
-        ResourceLocation id = ResourceLocation.tryParse(entityId);
+        Identifier id = Identifier.tryParse(entityId);
         if (id != null) {
-            var entityType = ForgeRegistries.ENTITY_TYPES.getValue(id);
-            if (entityType != null) {
-                return entityType.getDescription().getString();
-            }
+            return BuiltInRegistries.ENTITY_TYPE.get(id)
+                    .map(reference -> reference.value().getDescription().getString())
+                    .orElseGet(() -> getFallbackName(entityId));
         }
         return getFallbackName(entityId);
     }
@@ -189,12 +188,11 @@ public final class StructureTextHelper {
         if (blockId == null || blockId.isBlank()) {
             return getFallbackName(blockId);
         }
-        ResourceLocation id = ResourceLocation.tryParse(blockId);
+        Identifier id = Identifier.tryParse(blockId);
         if (id != null) {
-            var block = ForgeRegistries.BLOCKS.getValue(id);
-            if (block != null) {
-                return block.getName().getString();
-            }
+            return BuiltInRegistries.BLOCK.get(id)
+                    .map(reference -> reference.value().getName().getString())
+                    .orElseGet(() -> getFallbackName(blockId));
         }
         return getFallbackName(blockId);
     }
@@ -203,12 +201,11 @@ public final class StructureTextHelper {
         if (itemId == null || itemId.isBlank()) {
             return getFallbackName(itemId);
         }
-        ResourceLocation id = ResourceLocation.tryParse(itemId);
+        Identifier id = Identifier.tryParse(itemId);
         if (id != null) {
-            Item item = ForgeRegistries.ITEMS.getValue(id);
-            if (item != null) {
-                return item.getDescription().getString();
-            }
+            return BuiltInRegistries.ITEM.get(id)
+                    .map(reference -> reference.value().getName(reference.value().getDefaultInstance()).getString())
+                    .orElseGet(() -> getFallbackName(itemId));
         }
         return getFallbackName(itemId);
     }
@@ -246,7 +243,7 @@ public final class StructureTextHelper {
         if (raw == null || raw.isBlank()) {
             return translateOrFallback("jei_structures.common.unknown", "unknown");
         }
-        ResourceLocation id = ResourceLocation.tryParse(raw);
+        Identifier id = Identifier.tryParse(raw);
         String value = id != null ? id.getPath() : raw;
         value = value.replace('/', ' ').replace('_', ' ').trim();
         if (value.isEmpty()) {
@@ -255,15 +252,15 @@ public final class StructureTextHelper {
         return value;
     }
 
-    private static String buildStructureTranslationKey(ResourceLocation id) {
+    private static String buildStructureTranslationKey(Identifier id) {
         return "structure." + id.getNamespace() + "." + id.getPath().replace('/', '.');
     }
 
-    private static String buildStructureTypeTranslationKey(ResourceLocation id) {
+    private static String buildStructureTypeTranslationKey(Identifier id) {
         return "jei_structures.structure_type." + id.getNamespace() + "." + id.getPath().replace('/', '.');
     }
 
-    private static String getDimensionTranslationKey(ResourceLocation id) {
+    private static String getDimensionTranslationKey(Identifier id) {
         if ("minecraft".equals(id.getNamespace())) {
             if ("overworld".equals(id.getPath())) {
                 return "jei_structures.dimension.minecraft.overworld";

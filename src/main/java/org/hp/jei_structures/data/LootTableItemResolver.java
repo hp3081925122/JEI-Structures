@@ -4,25 +4,27 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.Gson;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.storage.loot.Deserializers;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunctions;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.hp.jei_structures.JeiStructures;
 
 import java.io.Reader;
@@ -42,21 +44,23 @@ public final class LootTableItemResolver {
 
     private final ResourceManager resourceManager;
     private final Registry<Item> itemRegistry;
+    private final HolderLookup.Provider lookupProvider;
     private final ServerLevel lootContextLevel;
-    private final Gson functionGson;
+    private final RegistryOps<JsonElement> registryOps;
     private final Map<String, Set<String>> itemCache = new HashMap<>();
     private final Map<String, StructureIndexCache.LootTableDetail> detailCache = new HashMap<>();
     private final Set<String> resolvingItems = new HashSet<>();
     private final Set<String> resolvingDetails = new HashSet<>();
 
-    public LootTableItemResolver(ResourceManager resourceManager, Registry<Item> itemRegistry, ServerLevel lootContextLevel) {
+    public LootTableItemResolver(ResourceManager resourceManager, Registry<Item> itemRegistry, HolderLookup.Provider lookupProvider, ServerLevel lootContextLevel) {
         this.resourceManager = resourceManager;
         this.itemRegistry = itemRegistry;
+        this.lookupProvider = lookupProvider;
         this.lootContextLevel = lootContextLevel;
-        this.functionGson = Deserializers.createFunctionSerializer().create();
+        this.registryOps = RegistryOps.create(JsonOps.INSTANCE, lookupProvider);
     }
 
-    public Set<String> resolveLootItems(ResourceLocation lootTableId) {
+    public Set<String> resolveLootItems(Identifier lootTableId) {
         if (lootTableId == null) {
             return Set.of();
         }
@@ -87,7 +91,7 @@ public final class LootTableItemResolver {
         }
     }
 
-    public StructureIndexCache.LootTableDetail resolveLootTableDetail(ResourceLocation lootTableId) {
+    public StructureIndexCache.LootTableDetail resolveLootTableDetail(Identifier lootTableId) {
         if (lootTableId == null) {
             return null;
         }
@@ -111,10 +115,13 @@ public final class LootTableItemResolver {
         }
     }
 
-    private StructureIndexCache.LootTableDetail buildLootTableDetail(ResourceLocation lootTableId) {
+    private StructureIndexCache.LootTableDetail buildLootTableDetail(Identifier lootTableId) {
         StructureIndexCache.LootTableDetail detail = new StructureIndexCache.LootTableDetail();
         detail.lootTableId = lootTableId.toString();
         JsonObject json = readJson(toLootTableLocation(lootTableId));
+        if (json == null) {
+            json = readJson(toLegacyLootTableLocation(lootTableId));
+        }
         if (json == null) {
             JeiStructures.LOGGER.debug("Loot table resource was not found: {}", lootTableId);
             return detail;
@@ -163,7 +170,7 @@ public final class LootTableItemResolver {
 
     private void appendEntries(
             List<StructureIndexCache.LootItemEntry> output,
-            ResourceLocation rootLootTableId,
+            Identifier rootLootTableId,
             JsonElement element,
             int totalWeight,
             String rollsText,
@@ -186,8 +193,8 @@ public final class LootTableItemResolver {
         List<StructureIndexCache.LootTextEntry> chanceNotes = mergeNotes(List.of(buildRelativeWeightNote(weight, totalWeight)), mergedChanceNotes);
 
         if ("minecraft:item".equals(type)) {
-            ResourceLocation itemId = getResourceLocation(object, "name");
-            if (itemId != null && ForgeRegistries.ITEMS.containsKey(itemId)) {
+            Identifier itemId = getIdentifier(object, "name");
+            if (itemId != null && BuiltInRegistries.ITEM.containsKey(itemId)) {
                 ItemStack stack = applyFunctions(createBaseStack(itemId), rootLootTableId, mergedFunctions, entryPath + "/item:" + itemId);
                 output.add(createLootItemEntry(stack, weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
             }
@@ -195,7 +202,7 @@ public final class LootTableItemResolver {
         }
 
         if ("minecraft:tag".equals(type)) {
-            ResourceLocation tagId = getResourceLocation(object, "name");
+            Identifier tagId = getIdentifier(object, "name");
             if (tagId == null) {
                 return;
             }
@@ -209,7 +216,7 @@ public final class LootTableItemResolver {
         }
 
         if ("minecraft:loot_table".equals(type)) {
-            ResourceLocation childLootTable = getResourceLocation(object, "name");
+            Identifier childLootTable = getIdentifier(object, "name");
             if (childLootTable == null) {
                 return;
             }
@@ -317,11 +324,11 @@ public final class LootTableItemResolver {
         return entry;
     }
 
-    private ItemStack createBaseStack(ResourceLocation itemId) {
-        if (itemId == null || !ForgeRegistries.ITEMS.containsKey(itemId)) {
+    private ItemStack createBaseStack(Identifier itemId) {
+        if (itemId == null || !BuiltInRegistries.ITEM.containsKey(itemId)) {
             return ItemStack.EMPTY;
         }
-        Item item = ForgeRegistries.ITEMS.getValue(itemId);
+        Item item = BuiltInRegistries.ITEM.get(itemId).map(reference -> reference.value()).orElse(null);
         return item != null ? new ItemStack(item) : ItemStack.EMPTY;
     }
 
@@ -335,7 +342,7 @@ public final class LootTableItemResolver {
         return ItemStackSnapshotHelper.parseSnapshot(snapshot);
     }
 
-    private ItemStack applyFunctions(ItemStack originalStack, ResourceLocation lootTableId, List<JsonElement> functionElements, String entryPath) {
+    private ItemStack applyFunctions(ItemStack originalStack, Identifier lootTableId, List<JsonElement> functionElements, String entryPath) {
         if (originalStack == null || originalStack.isEmpty() || functionElements == null || functionElements.isEmpty() || lootContextLevel == null) {
             return originalStack;
         }
@@ -354,14 +361,14 @@ public final class LootTableItemResolver {
         return stack;
     }
 
-    private LootContext createFunctionContext(ResourceLocation lootTableId, String entryPath) {
+    private LootContext createFunctionContext(Identifier lootTableId, String entryPath) {
         LootParams params = new LootParams.Builder(lootContextLevel)
                 .withParameter(LootContextParams.ORIGIN, Vec3.ZERO)
                 .create(LootContextParamSets.CHEST);
         return new LootContext.Builder(params)
                 .withOptionalRandomSeed(computeSeed(lootTableId, entryPath))
                 .withQueriedLootTableId(lootTableId)
-                .create(null);
+                .create(Optional.empty());
     }
 
     private List<LootItemFunction> decodeFunctions(List<JsonElement> functionElements) {
@@ -374,10 +381,7 @@ public final class LootTableItemResolver {
                 continue;
             }
             try {
-                LootItemFunction function = functionGson.fromJson(functionElement, LootItemFunction.class);
-                if (function != null) {
-                    functions.add(function);
-                }
+                LootItemFunctions.ROOT_CODEC.parse(registryOps, functionElement).result().ifPresent(functions::add);
             } catch (Exception exception) {
                 JeiStructures.LOGGER.debug("Failed to decode loot function: {}", functionElement, exception);
             }
@@ -422,7 +426,7 @@ public final class LootTableItemResolver {
         return elements.isEmpty() ? List.of() : List.copyOf(elements);
     }
 
-    private static long computeSeed(ResourceLocation lootTableId, String entryPath) {
+    private static long computeSeed(Identifier lootTableId, String entryPath) {
         long value = 0x9E3779B97F4A7C15L;
         if (lootTableId != null) {
             value ^= lootTableId.toString().hashCode();
@@ -541,10 +545,10 @@ public final class LootTableItemResolver {
         return copyNotes(countNotes);
     }
 
-    private List<String> expandTag(ResourceLocation tagId) {
+    private List<String> expandTag(Identifier tagId) {
         LinkedHashSet<String> itemIds = new LinkedHashSet<>();
         for (Holder<Item> holder : itemRegistry.getTagOrEmpty(TagKey.create(Registries.ITEM, tagId))) {
-            ResourceLocation itemId = itemRegistry.getKey(holder.value());
+            Identifier itemId = itemRegistry.getKey(holder.value());
             if (itemId != null) {
                 itemIds.add(itemId.toString());
             }
@@ -554,7 +558,7 @@ public final class LootTableItemResolver {
                 .toList();
     }
 
-    private JsonObject readJson(ResourceLocation location) {
+    private JsonObject readJson(Identifier location) {
         try {
             Optional<Resource> resource = resourceManager.getResource(location);
             if (resource.isEmpty()) {
@@ -570,8 +574,12 @@ public final class LootTableItemResolver {
         }
     }
 
-    private ResourceLocation toLootTableLocation(ResourceLocation lootTableId) {
-        return ResourceLocation.fromNamespaceAndPath(lootTableId.getNamespace(), "loot_tables/" + lootTableId.getPath() + ".json");
+    private Identifier toLootTableLocation(Identifier lootTableId) {
+        return Identifier.fromNamespaceAndPath(lootTableId.getNamespace(), "loot_table/" + lootTableId.getPath() + ".json");
+    }
+
+    private Identifier toLegacyLootTableLocation(Identifier lootTableId) {
+        return Identifier.fromNamespaceAndPath(lootTableId.getNamespace(), "loot_tables/" + lootTableId.getPath() + ".json");
     }
 
     private static StructureIndexCache.LootTableDetail copyDetail(StructureIndexCache.LootTableDetail source) {
@@ -625,9 +633,9 @@ public final class LootTableItemResolver {
         }
     }
 
-    private static ResourceLocation getResourceLocation(JsonObject object, String key) {
+    private static Identifier getIdentifier(JsonObject object, String key) {
         String value = getString(object, key);
-        return value.isBlank() ? null : ResourceLocation.tryParse(value);
+        return value.isBlank() ? null : Identifier.tryParse(value);
     }
 
     private static String fallbackText(String text, String fallback) {
@@ -715,7 +723,7 @@ public final class LootTableItemResolver {
         if (key == null || key.isBlank()) {
             return "";
         }
-        ResourceLocation id = ResourceLocation.tryParse(key);
+        Identifier id = Identifier.tryParse(key);
         String raw = id != null ? id.getPath() : key;
         return raw.replace('_', ' ').toLowerCase(Locale.ROOT);
     }
@@ -731,14 +739,12 @@ public final class LootTableItemResolver {
         if (itemId == null || itemId.isBlank()) {
             return "";
         }
-        ResourceLocation id = ResourceLocation.tryParse(itemId);
+        Identifier id = Identifier.tryParse(itemId);
         if (id == null) {
             return itemId;
         }
-        Item item = ForgeRegistries.ITEMS.getValue(id);
-        if (item == null) {
-            return itemId;
-        }
-        return item.getDescription().getString();
+        return BuiltInRegistries.ITEM.get(id)
+                .map(reference -> reference.value().getName(reference.value().getDefaultInstance()).getString())
+                .orElse(itemId);
     }
 }

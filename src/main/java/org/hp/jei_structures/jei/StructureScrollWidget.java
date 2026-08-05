@@ -1,22 +1,20 @@
 package org.hp.jei_structures.jei;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.vertex.PoseStack;
+import mezz.jei.common.Internal;
+import mezz.jei.common.gui.elements.ScalableDrawable;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.inputs.IJeiInputHandler;
 import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.gui.inputs.RecipeSlotUnderMouse;
 import mezz.jei.api.gui.widgets.ISlottedRecipeWidget;
-import mezz.jei.common.Internal;
-import mezz.jei.common.gui.elements.DrawableNineSliceTexture;
-import mezz.jei.common.gui.textures.Textures;
-import mezz.jei.common.util.ImmutableRect2i;
-import mezz.jei.common.util.MathUtil;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenPosition;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.util.Mth;
+import org.hp.jei_structures.JeiStructures;
+import org.joml.Matrix3x2fStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,13 +31,13 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
     private final int y;
     private final int width;
     private final int height;
-    private final ImmutableRect2i area;
-    private final ImmutableRect2i contentsArea;
-    private final ImmutableRect2i scrollbarArea;
-    private final DrawableNineSliceTexture scrollbarMarker;
-    private final DrawableNineSliceTexture scrollbarBackground;
+    private final ScreenRectangle area;
+    private final ScreenRectangle contentsArea;
+    private final ScreenRectangle scrollbarArea;
     private final int contentHeight;
     private final List<StructureRecipeCategory.SlotPlacement> slotPlacements;
+    private final ScalableDrawable scrollbarBackground;
+    private final ScalableDrawable scrollbarMarker;
     private double dragOriginY = -1.0D;
     private float scrollOffsetY = 0.0F;
 
@@ -50,40 +48,77 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         this.y = y;
         this.width = width;
         this.height = height;
-        this.area = new ImmutableRect2i(x, y, width, height);
-        this.contentsArea = new ImmutableRect2i(0, 0, width - SCROLLBAR_EXTRA_WIDTH, height);
-        this.scrollbarArea = new ImmutableRect2i(width - SCROLLBAR_WIDTH, 0, SCROLLBAR_WIDTH, height);
-        Textures textures = Internal.getTextures();
-        this.scrollbarMarker = textures.getScrollbarMarker();
-        this.scrollbarBackground = textures.getScrollbarBackground();
+        this.area = new ScreenRectangle(x, y, width, height);
+        this.contentsArea = new ScreenRectangle(0, 0, width - SCROLLBAR_EXTRA_WIDTH, height);
+        this.scrollbarArea = new ScreenRectangle(width - SCROLLBAR_WIDTH, 0, SCROLLBAR_WIDTH, height);
         this.contentHeight = recipe.getTotalContentHeight();
         this.slotPlacements = StructureRecipeCategory.getSlotPlacements(recipe);
+        this.scrollbarBackground = Internal.getTextures().getScrollbarBackground();
+        this.scrollbarMarker = Internal.getTextures().getScrollbarMarker();
+        JeiStructures.LOGGER.debug(
+                "Registered structure recipe scroll widget: structure={}, slots={}, placements={}, area={}x{}@{},{}; contents={}x{}@{},{}; scrollbar={}x{}@{},{}; contentHeight={}",
+                recipe.getStructureId(),
+                this.contentSlots.size(),
+                this.slotPlacements.size(),
+                this.area.width(),
+                this.area.height(),
+                this.area.left(),
+                this.area.top(),
+                this.contentsArea.width(),
+                this.contentsArea.height(),
+                this.contentsArea.left(),
+                this.contentsArea.top(),
+                this.scrollbarArea.width(),
+                this.scrollbarArea.height(),
+                this.scrollbarArea.left(),
+                this.scrollbarArea.top(),
+                this.contentHeight
+        );
     }
 
     @Override
     public ScreenPosition getPosition() {
-        return area.getScreenPosition();
+        return new ScreenPosition(x, y);
     }
 
     @Override
     public ScreenRectangle getArea() {
-        return area.toScreenRectangle();
+        return area;
     }
 
     @Override
-    public void drawWidget(GuiGraphics guiGraphics, double mouseX, double mouseY) {
-        scrollbarBackground.draw(guiGraphics, scrollbarArea);
-        scrollbarMarker.draw(guiGraphics, getScrollbarMarkerArea());
+    public void drawWidget(GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
+        scrollbarBackground.draw(
+                guiGraphics,
+                scrollbarArea.left(),
+                scrollbarArea.top(),
+                scrollbarArea.width(),
+                scrollbarArea.height()
+        );
+        if (getHiddenAmount() > 0) {
+            ScreenRectangle markerArea = getScrollbarMarkerArea();
+            scrollbarMarker.draw(
+                    guiGraphics,
+                    markerArea.left(),
+                    markerArea.top(),
+                    markerArea.width(),
+                    markerArea.height()
+            );
+        }
 
-        PoseStack poseStack = guiGraphics.pose();
-        ScreenRectangle scissorArea = MathUtil.transform(contentsArea, poseStack.last().pose());
-        guiGraphics.enableScissor(scissorArea.left(), scissorArea.top(), scissorArea.right(), scissorArea.bottom());
-        poseStack.pushPose();
+        Matrix3x2fStack poseStack = guiGraphics.pose();
         int scrollPixels = getScrollPixels();
-        poseStack.translate(0.0D, -scrollPixels, 0.0D);
+        guiGraphics.enableScissor(
+                contentsArea.left() + 1,
+                contentsArea.top() + 1,
+                contentsArea.right(),
+                contentsArea.bottom() - 1
+        );
+        poseStack.pushMatrix();
+        poseStack.translate(0.0F, -scrollPixels);
         StructureRecipeCategory.drawScrollableContents(recipe, guiGraphics, 0, 0);
-        drawSlots(guiGraphics);
-        poseStack.popPose();
+        drawSlots(guiGraphics, scrollPixels);
+        poseStack.popMatrix();
         guiGraphics.disableScissor();
     }
 
@@ -117,68 +152,63 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
 
     @Override
     public boolean handleInput(double mouseX, double mouseY, IJeiUserInput userInput) {
-        if (!userInput.is(Internal.getKeyMappings().getLeftClick())) {
+        if (userInput.getKey().getValue() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (!userInput.isSimulate()) {
             dragOriginY = -1.0D;
         }
-        if (!scrollbarArea.contains(mouseX, mouseY) || getHiddenAmount() == 0) {
+        if (!contains(scrollbarArea, mouseX, mouseY) || getHiddenAmount() == 0) {
             return false;
         }
         if (userInput.isSimulate()) {
-            ImmutableRect2i markerArea = getScrollbarMarkerArea();
-            if (!markerArea.contains(mouseX, mouseY)) {
+            ScreenRectangle markerArea = getScrollbarMarkerArea();
+            if (!contains(markerArea, mouseX, mouseY)) {
                 moveScrollbarCenterTo(markerArea, mouseY);
                 markerArea = getScrollbarMarkerArea();
             }
-            dragOriginY = mouseY - markerArea.y();
+            dragOriginY = mouseY - markerArea.top();
         }
         return true;
     }
 
     @Override
-    public boolean handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaY) {
-        if (getHiddenAmount() > 0) {
+    public boolean handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaX, double scrollDeltaY) {
+        if (getHiddenAmount() > 0 && isMouseOverContent(mouseX, mouseY)) {
             float scrollAmount = (float) (scrollDeltaY * 18.0D / Math.max(contentHeight, 1));
             scrollOffsetY = Mth.clamp(scrollOffsetY - scrollAmount, 0.0F, 1.0F);
             return true;
         }
         scrollOffsetY = 0.0F;
-        return true;
+        return false;
     }
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        if (dragOriginY < 0.0D || mouseKey.getValue() != 0) {
+        if (dragOriginY < 0.0D || mouseKey.getValue() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
-        ImmutableRect2i markerArea = getScrollbarMarkerArea();
+        ScreenRectangle markerArea = getScrollbarMarkerArea();
         double topY = mouseY - dragOriginY;
         moveScrollbarTo(markerArea, topY);
         return true;
     }
 
-    private void drawSlots(GuiGraphics guiGraphics) {
+    private void drawSlots(GuiGraphicsExtractor guiGraphics, int scrollPixels) {
         int slotCount = Math.min(contentSlots.size(), slotPlacements.size());
         for (int index = 0; index < slotCount; index++) {
             IRecipeSlotDrawable slot = contentSlots.get(index);
             StructureRecipeCategory.SlotPlacement placement = slotPlacements.get(index);
+            if (!isSlotVisible(placement.y() - scrollPixels)) {
+                continue;
+            }
             slot.setPosition(placement.x(), placement.y());
             slot.draw(guiGraphics);
         }
     }
 
-    private boolean isMouseOverWidget(double mouseX, double mouseY) {
-        return mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height;
-    }
-
     private boolean isMouseOverContent(double mouseX, double mouseY) {
-        return contentsArea.contains(mouseX, mouseY);
-    }
-
-    private boolean isMouseOverScrollbar(double mouseX, double mouseY) {
-        return scrollbarArea.contains(mouseX, mouseY);
+        return contains(contentsArea, mouseX, mouseY);
     }
 
     private int getVisibleAmount() {
@@ -202,21 +232,26 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
     private int getScrollbarMarkerY() {
         int markerHeight = getScrollbarMarkerHeight();
         int totalSpace = scrollbarArea.height() - 2 - markerHeight;
-        return scrollbarArea.getY() + 1 + Math.round(totalSpace * scrollOffsetY);
+        return scrollbarArea.top() + 1 + Math.round(totalSpace * scrollOffsetY);
     }
 
-    private ImmutableRect2i getScrollbarMarkerArea() {
-        return new ImmutableRect2i(scrollbarArea.getX() + 1, getScrollbarMarkerY(), scrollbarArea.width() - 2, getScrollbarMarkerHeight());
+    private ScreenRectangle getScrollbarMarkerArea() {
+        return new ScreenRectangle(
+                scrollbarArea.left() + 1,
+                getScrollbarMarkerY(),
+                scrollbarArea.width() - 2,
+                getScrollbarMarkerHeight()
+        );
     }
 
-    private void moveScrollbarCenterTo(ImmutableRect2i markerArea, double centerY) {
+    private void moveScrollbarCenterTo(ScreenRectangle markerArea, double centerY) {
         double topY = centerY - (double) markerArea.height() / 2.0D;
         moveScrollbarTo(markerArea, topY);
     }
 
-    private void moveScrollbarTo(ImmutableRect2i markerArea, double topY) {
-        int minY = scrollbarArea.y();
-        int maxY = scrollbarArea.y() + scrollbarArea.height() - markerArea.height();
+    private void moveScrollbarTo(ScreenRectangle markerArea, double topY) {
+        int minY = scrollbarArea.top() + 1;
+        int maxY = scrollbarArea.bottom() - 1 - markerArea.height();
         double relativeY = topY - (double) minY;
         int totalSpace = maxY - minY;
         if (totalSpace <= 0) {
@@ -226,7 +261,11 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         scrollOffsetY = Mth.clamp((float) (relativeY / (double) totalSpace), 0.0F, 1.0F);
     }
 
-    private int getScrollbarWidth() {
-        return SCROLLBAR_EXTRA_WIDTH;
+    private boolean isSlotVisible(int slotY) {
+        return slotY + 18 > contentsArea.top() && slotY < contentsArea.bottom();
+    }
+
+    private static boolean contains(ScreenRectangle rectangle, double x, double y) {
+        return x >= rectangle.left() && x < rectangle.right() && y >= rectangle.top() && y < rectangle.bottom();
     }
 }
