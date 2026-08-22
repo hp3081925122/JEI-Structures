@@ -52,6 +52,7 @@ public final class StructureIndexCacheLoader {
             } catch (AtomicMoveNotSupportedException exception) {
                 Files.move(temporaryPath, binaryPath, StandardCopyOption.REPLACE_EXISTING);
             }
+            cached = cache;
         } catch (Exception exception) {
             JeiStructures.LOGGER.error("Failed to write structure index binary cache: {}", binaryPath, exception);
             try {

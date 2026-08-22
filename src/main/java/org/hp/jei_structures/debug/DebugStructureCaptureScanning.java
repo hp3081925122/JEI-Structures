@@ -37,7 +37,7 @@ public final class DebugStructureCaptureScanning {
                 box.maxY() + 1.0D,
                 box.maxZ() + 1.0D
         );
-        List<LivingEntity> entities = context.level().getEntitiesOfClass(LivingEntity.class, bounds, entity -> entity != null && entity.isAlive() && !context.playerPredicate().test(entity));
+        List<LivingEntity> entities = context.level().getEntitiesOfClass(LivingEntity.class, bounds, entity -> entity != null && entity.isAlive() && !StructureCaptureEntityFilter.isNaturalSpawn(entity) && !context.playerPredicate().test(entity));
         for (LivingEntity entity : entities) {
             sampled++;
             ResourceLocation entityId = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
