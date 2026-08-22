@@ -1028,6 +1028,9 @@ public final class DebugStructureCaptureManager {
             if (!(entity instanceof LivingEntity livingEntity) || entity instanceof Player) {
                 return;
             }
+            if (StructureCaptureEntityFilter.isNaturalSpawn(livingEntity)) {
+                return;
+            }
             if (level != currentAttemptLevel()) {
                 return;
             }
