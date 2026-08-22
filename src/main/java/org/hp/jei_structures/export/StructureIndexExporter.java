@@ -37,6 +37,7 @@ import org.hp.jei_structures.data.StructureBlacklistLoader;
 import org.hp.jei_structures.data.StructureBindingData;
 import org.hp.jei_structures.data.StructureBindingLoader;
 import org.hp.jei_structures.data.StructureIndexCache;
+import org.hp.jei_structures.data.StructureIndexCacheLoader;
 import org.hp.jei_structures.data.StructureLootBinding;
 import org.hp.jei_structures.data.StructureIndexPaths;
 import org.hp.jei_structures.data.StructureSpecialInfoData;
@@ -119,6 +120,7 @@ public final class StructureIndexExporter {
         try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
             StructureIndexCache.GSON.toJson(cache, writer);
         }
+        StructureIndexCacheLoader.reload();
         JeiStructures.LOGGER.info("Structure index export completed. Output file: {}", path);
         return path;
     }
