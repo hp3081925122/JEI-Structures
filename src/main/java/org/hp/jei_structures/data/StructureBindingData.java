@@ -9,6 +9,8 @@ public final class StructureBindingData {
 
     private final Map<String, List<String>> structureToMobs = new LinkedHashMap<>();
     private final Map<String, List<StructureLootBinding>> structureToLootBindings = new LinkedHashMap<>();
+    private final Map<String, List<String>> exportStructureToMobs = new LinkedHashMap<>();
+    private final Map<String, List<StructureLootBinding>> exportStructureToLootBindings = new LinkedHashMap<>();
 
     public Map<String, List<String>> getStructureToMobs() {
         return structureToMobs;
@@ -16,6 +18,14 @@ public final class StructureBindingData {
 
     public Map<String, List<StructureLootBinding>> getStructureToLootBindings() {
         return structureToLootBindings;
+    }
+
+    public Map<String, List<String>> getExportStructureToMobs() {
+        return exportStructureToMobs;
+    }
+
+    public Map<String, List<StructureLootBinding>> getExportStructureToLootBindings() {
+        return exportStructureToLootBindings;
     }
 
     public void addMobBinding(String structureId, List<String> entityIds) {
@@ -32,6 +42,20 @@ public final class StructureBindingData {
         structureToLootBindings.computeIfAbsent(structureId, key -> new ArrayList<>()).add(binding.copy());
     }
 
+    public void addExportMobBinding(String structureId, List<String> entityIds) {
+        if (structureId == null || structureId.isBlank() || entityIds == null || entityIds.isEmpty()) {
+            return;
+        }
+        exportStructureToMobs.computeIfAbsent(structureId, key -> new ArrayList<>()).addAll(entityIds);
+    }
+
+    public void addExportLootBinding(String structureId, StructureLootBinding binding) {
+        if (structureId == null || structureId.isBlank() || binding == null) {
+            return;
+        }
+        exportStructureToLootBindings.computeIfAbsent(structureId, key -> new ArrayList<>()).add(binding.copy());
+    }
+
     public void merge(StructureBindingData other) {
         if (other == null) {
             return;
@@ -40,6 +64,12 @@ public final class StructureBindingData {
         other.structureToLootBindings.forEach((structureId, bindings) -> {
             for (StructureLootBinding binding : bindings) {
                 addLootBinding(structureId, binding);
+            }
+        });
+        other.exportStructureToMobs.forEach(this::addExportMobBinding);
+        other.exportStructureToLootBindings.forEach((structureId, bindings) -> {
+            for (StructureLootBinding binding : bindings) {
+                addExportLootBinding(structureId, binding);
             }
         });
     }

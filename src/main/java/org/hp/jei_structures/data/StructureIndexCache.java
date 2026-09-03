@@ -70,7 +70,7 @@ public final class StructureIndexCache implements Serializable {
                     if (detail == null || detail.lootTableId == null || detail.lootTableId.isBlank()) {
                         continue;
                     }
-                    lootTableDetails.putIfAbsent(detail.lootTableId, detail);
+                    putPreferredLootTableDetail(detail);
                     ids.add(detail.lootTableId);
                 }
             }
@@ -100,13 +100,56 @@ public final class StructureIndexCache implements Serializable {
                     if (detail == null || detail.lootTableId == null || detail.lootTableId.isBlank()) {
                         continue;
                     }
-                    lootTableDetails.putIfAbsent(detail.lootTableId, detail);
+                    putPreferredLootTableDetail(detail);
                     ids.add(detail.lootTableId);
                 }
             }
             binding.lootTableIds = new ArrayList<>(ids);
             binding.lootTables = new ArrayList<>();
         }
+    }
+
+    private void putPreferredLootTableDetail(LootTableDetail incoming) {
+        if (incoming == null || incoming.lootTableId == null || incoming.lootTableId.isBlank()) {
+            return;
+        }
+        LootTableDetail existing = lootTableDetails.get(incoming.lootTableId);
+        if (existing == null || lootTableDetailScore(incoming) > lootTableDetailScore(existing)) {
+            lootTableDetails.put(incoming.lootTableId, incoming);
+        }
+    }
+
+    private static int lootTableDetailScore(LootTableDetail detail) {
+        if (detail == null || detail.entries == null) {
+            return 0;
+        }
+        int score = detail.entries.size() * 100;
+        for (LootItemEntry entry : detail.entries) {
+            if (entry == null) {
+                continue;
+            }
+            if (entry.itemId != null && !entry.itemId.isBlank()) {
+                score++;
+            }
+            if (entry.itemStackTag != null && !entry.itemStackTag.isBlank()) {
+                score += 4;
+            }
+            if (entry.rollsText != null && !entry.rollsText.isBlank()) {
+                score++;
+            }
+            if (entry.bonusRollsText != null && !entry.bonusRollsText.isBlank()) {
+                score++;
+            }
+            if (entry.chanceText != null && !entry.chanceText.isBlank()) {
+                score++;
+            }
+            if (entry.countText != null && !entry.countText.isBlank()) {
+                score++;
+            }
+            score += entry.chanceNotes != null ? entry.chanceNotes.size() : 0;
+            score += entry.countNotes != null ? entry.countNotes.size() : 0;
+        }
+        return score;
     }
 
     public static final class StructureEntry implements Serializable {
