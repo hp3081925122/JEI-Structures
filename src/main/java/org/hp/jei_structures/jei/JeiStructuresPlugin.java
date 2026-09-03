@@ -3,6 +3,7 @@ package org.hp.jei_structures.jei;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.ingredients.ITypedIngredient;
+import mezz.jei.api.runtime.IJeiRuntime;
 import mezz.jei.api.recipe.advanced.ISimpleRecipeManagerPlugin;
 import mezz.jei.api.registration.IAdvancedRegistration;
 import mezz.jei.api.registration.IModIngredientRegistration;
@@ -12,7 +13,9 @@ import mezz.jei.api.registration.IRecipeRegistration;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.fml.ModList;
 import org.hp.jei_structures.JeiStructures;
+import org.hp.jei_structures.compat.EmiStructureRecipeOpener;
 import org.hp.jei_structures.data.StructureIndexCache;
 import org.hp.jei_structures.data.StructureIndexCacheLoader;
 
@@ -29,6 +32,8 @@ import java.util.Set;
 public final class JeiStructuresPlugin implements IModPlugin {
 
     private static volatile CachedRecipes cachedRecipes;
+    private static volatile IJeiRuntime runtime;
+    private static volatile StructureRecipeCategory category;
     private final ResourceLocation pluginId = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, "plugin");
 
     @Override
@@ -44,7 +49,9 @@ public final class JeiStructuresPlugin implements IModPlugin {
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
-        registration.addRecipeCategories(new StructureRecipeCategory(registration.getJeiHelpers().getGuiHelper()));
+        StructureRecipeCategory structureCategory = new StructureRecipeCategory(registration.getJeiHelpers().getGuiHelper());
+        category = structureCategory;
+        registration.addRecipeCategories(structureCategory);
     }
 
     @Override
@@ -62,7 +69,51 @@ public final class JeiStructuresPlugin implements IModPlugin {
         registration.addTypedRecipeManagerPlugin(StructureRecipeCategory.TYPE, new StructureRecipeLookupPlugin());
     }
 
-    private static List<StructureRecipe> getSharedRecipes() {
+    // 保存 JEI 运行时对象，供当前结构按键打开对应配方页面。
+    @Override
+    public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
+        runtime = jeiRuntime;
+        JeiStructures.LOGGER.debug("JEI runtime became available for current structure opener");
+    }
+
+    @Override
+    public void onRuntimeUnavailable() {
+        runtime = null;
+        JeiStructures.LOGGER.debug("JEI runtime became unavailable for current structure opener");
+    }
+
+    // 根据当前结构 ID 打开 EMI 原生页面，失败时回退到 JEI 页面。
+    public static boolean openStructureRecipe(String structureId) {
+        if (structureId == null || structureId.isBlank()) {
+            return false;
+        }
+        List<StructureRecipe> matchedRecipes = getSharedRecipes().stream()
+                .filter(recipe -> structureId.equals(recipe.getStructureId()))
+                .toList();
+        if (matchedRecipes.isEmpty()) {
+            JeiStructures.LOGGER.debug("Cannot open current structure recipe because it is not present in the client cache: {}", structureId);
+            return false;
+        }
+        if (ModList.get().isLoaded("emi") && EmiStructureRecipeOpener.open(matchedRecipes.get(0))) {
+            return true;
+        }
+        IJeiRuntime currentRuntime = runtime;
+        StructureRecipeCategory currentCategory = category;
+        if (currentRuntime == null || currentCategory == null) {
+            JeiStructures.LOGGER.debug(
+                    "Cannot open current structure recipe through JEI: runtimeAvailable={}, categoryAvailable={}, structureId={}",
+                    currentRuntime != null,
+                    currentCategory != null,
+                    structureId
+            );
+            return false;
+        }
+        currentRuntime.getRecipesGui().showRecipes(currentCategory, matchedRecipes, List.of());
+        JeiStructures.LOGGER.debug("Opened current structure recipe through JEI: {}", structureId);
+        return true;
+    }
+
+    public static List<StructureRecipe> getSharedRecipes() {
         StructureIndexCache cache = StructureIndexCacheLoader.load();
         CachedRecipes snapshot = cachedRecipes;
         if (snapshot != null && snapshot.sourceCache == cache) {

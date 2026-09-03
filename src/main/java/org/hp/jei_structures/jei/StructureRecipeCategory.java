@@ -203,6 +203,22 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         return SCROLLBAR_EXTRA_WIDTH;
     }
 
+    static int getContentX() {
+        return CONTENT_X;
+    }
+
+    static int getContentY() {
+        return CONTENT_Y;
+    }
+
+    static int getContentWidth() {
+        return CONTENT_WIDTH;
+    }
+
+    static int getContentHeight() {
+        return CONTENT_HEIGHT;
+    }
+
     private static int getContentWidthWithoutScrollbar() {
         return CONTENT_WIDTH - getScrollbarWidth();
     }
@@ -270,7 +286,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         guiGraphics.drawString(font, text, centerX - width / 2, y + TITLE_CENTER_Y - font.lineHeight / 2, resolveTextColor(text, color), false);
     }
 
-    private static void drawFixedHeader(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
+    static void drawFixedHeader(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
         Font font = Minecraft.getInstance().font;
         int titleY = y - FIXED_TITLE_Y;
         drawCenteredString(guiGraphics, font, recipe.getDisplayName(), x + getContentRightEdge() / 2, titleY, 0xFF2A2A2A);

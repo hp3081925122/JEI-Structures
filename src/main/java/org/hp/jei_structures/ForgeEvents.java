@@ -14,6 +14,7 @@ import org.hp.jei_structures.data.StructureIndexCacheLoader;
 import org.hp.jei_structures.debug.DebugStructureCaptureManager;
 import org.hp.jei_structures.debug.StructureCaptureEntityFilter;
 import org.hp.jei_structures.export.StructureIndexExporter;
+import org.hp.jei_structures.tracker.CurrentStructureTracker;
 
 import java.nio.file.Path;
 
@@ -34,6 +35,7 @@ public final class ForgeEvents {
             return;
         }
         DebugStructureCaptureManager.tick(event.getServer());
+        CurrentStructureTracker.tick(event.getServer());
     }
 
     // 在服务器启动完成后，仅在结构索引没有有效内容时执行正式导出。

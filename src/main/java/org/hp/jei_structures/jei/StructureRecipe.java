@@ -79,6 +79,11 @@ public final class StructureRecipe {
         return id;
     }
 
+    // 返回结构索引中的原始结构 ID，供当前结构追踪和页面打开流程使用。
+    public String getStructureId() {
+        return entry.structureId;
+    }
+
     public StructureIndexCache.StructureEntry getEntry() {
         return copyEntry(entry);
     }
