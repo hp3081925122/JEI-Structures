@@ -17,6 +17,10 @@ public final class StructureBindingPaths {
         return FMLPaths.CONFIGDIR.get().resolve("jei_structures").resolve("reports");
     }
 
+    public static Path getExportsRoot() {
+        return FMLPaths.CONFIGDIR.get().resolve("jei_structures").resolve("exports");
+    }
+
     public static Path getStructureToMobsDir() {
         return getBindingsRoot().resolve("structure_to_mobs");
     }

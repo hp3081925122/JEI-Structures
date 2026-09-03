@@ -36,6 +36,7 @@ import org.hp.jei_structures.data.StructureBlacklistData;
 import org.hp.jei_structures.data.StructureBlacklistLoader;
 import org.hp.jei_structures.data.StructureBindingData;
 import org.hp.jei_structures.data.StructureBindingLoader;
+import org.hp.jei_structures.data.StructureBindingPaths;
 import org.hp.jei_structures.data.StructureIndexCache;
 import org.hp.jei_structures.data.StructureIndexCacheLoader;
 import org.hp.jei_structures.data.StructureLootBinding;
@@ -63,6 +64,7 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -86,6 +88,7 @@ public final class StructureIndexExporter {
         StructureBindingData bindingData = StructureBindingLoader.loadAll(resourceManager);
         StructureBlacklistData blacklistData = StructureBlacklistLoader.loadAll(resourceManager);
         StructureSpecialInfoData specialInfoData = StructureSpecialInfoLoader.loadAll(resourceManager);
+        Files.createDirectories(StructureBindingPaths.getExportsRoot());
         JeiStructures.LOGGER.info("Starting structure index export. Registered structures: {}", structureRegistry.size());
 
         StructureIndexCache cache = new StructureIndexCache();
@@ -111,9 +114,17 @@ public final class StructureIndexExporter {
             }
         }
 
+        applyExportBindings(entries, bindingData, lootResolver, blacklistData, specialInfoData);
         entries.sort(Comparator.comparing(entry -> entry.structureId));
         cache.structures = entries;
-        JeiStructures.LOGGER.info("Structure scan completed. Exportable: {}, skipped: {}", entries.size(), skippedCount);
+        JeiStructures.LOGGER.info(
+                "Structure scan completed. Exportable: {}, skipped: {}, imported export structures: {}",
+                entries.size(),
+                skippedCount,
+                bindingData.getExportStructureToMobs().size() + bindingData.getExportStructureToLootBindings().keySet().stream()
+                        .filter(structureId -> !bindingData.getExportStructureToMobs().containsKey(structureId))
+                        .count()
+        );
 
         Path path = StructureIndexPaths.getCachePath();
         Files.createDirectories(path.getParent());
@@ -178,9 +189,279 @@ public final class StructureIndexExporter {
         applyEntityAndBlockBlacklist(structureId, entry, spawnOverrideEntities, templateEntities, allMobEntityIds, blacklistData);
         applySpecialInfoBindings(entry, allMobEntityIds, specialInfoData);
 
+        applyConfiguredLootBindings(structureId, entry, lootResolver, bindingData, blacklistData);
+        applyLootBlacklist(structureId, entry, blacklistData);
+
+        entry.templateIds = new ArrayList<>(templateIds);
+        entry.spawnOverridesEntities = new ArrayList<>(spawnOverrideEntities);
+        entry.templateEntities = new ArrayList<>(templateEntities);
+        entry.spawnedEntities = mergeOrdered(spawnOverrideEntities, templateEntities);
+        entry.allMobEntityIds = new ArrayList<>(allMobEntityIds);
+        refreshDerivedData(entry, lootResolver);
+        JeiStructures.LOGGER.debug(
+                "Structure {} export finished. Templates: {}, mobs: {}, spawners: {}, containers: {}, suspicious blocks: {}",
+                structureId,
+                entry.templateIds.size(),
+                entry.allMobEntityIds.size(),
+                entry.spawners.size(),
+                entry.containers.size(),
+                entry.suspiciousBlocks.size()
+        );
+        return entry;
+    }
+
+    private static void applyExportBindings(List<StructureIndexCache.StructureEntry> entries, StructureBindingData bindingData, LootTableItemResolver lootResolver, StructureBlacklistData blacklistData, StructureSpecialInfoData specialInfoData) {
+        if (entries == null || bindingData == null) {
+            return;
+        }
+        Map<String, StructureIndexCache.StructureEntry> entriesById = new LinkedHashMap<>();
+        for (StructureIndexCache.StructureEntry entry : entries) {
+            if (entry != null && entry.structureId != null && !entry.structureId.isBlank()) {
+                entriesById.put(entry.structureId, entry);
+            }
+        }
+
+        LinkedHashSet<String> exportedStructureIds = new LinkedHashSet<>();
+        exportedStructureIds.addAll(bindingData.getExportStructureToMobs().keySet());
+        exportedStructureIds.addAll(bindingData.getExportStructureToLootBindings().keySet());
+        for (String structureIdString : exportedStructureIds.stream().sorted(String.CASE_INSENSITIVE_ORDER).toList()) {
+            ResourceLocation structureId = ResourceLocation.tryParse(structureIdString);
+            if (structureId == null) {
+                JeiStructures.LOGGER.warn("Skipped export data with an invalid structure id: {}", structureIdString);
+                continue;
+            }
+            StructureIndexCache.StructureEntry entry = entriesById.get(structureIdString);
+            if (entry == null) {
+                entry = new StructureIndexCache.StructureEntry();
+                entry.structureId = structureIdString;
+                entriesById.put(structureIdString, entry);
+            }
+
+            LinkedHashSet<String> allMobEntityIds = new LinkedHashSet<>(entry.allMobEntityIds != null ? entry.allMobEntityIds : List.of());
+            List<String> exportedMobIds = bindingData.getExportStructureToMobs().get(structureIdString);
+            if (exportedMobIds != null) {
+                allMobEntityIds.addAll(exportedMobIds);
+            }
+            if (blacklistData != null) {
+                allMobEntityIds.removeIf(entityId -> blacklistData.isEntityBlocked(structureIdString, entityId));
+            }
+            entry.allMobEntityIds = new ArrayList<>(allMobEntityIds);
+
+            List<StructureLootBinding> exportedLootBindings = bindingData.getExportStructureToLootBindings().get(structureIdString);
+            mergeExportLootBindings(entry, exportedLootBindings, lootResolver, structureIdString);
+            applySpecialInfoBindings(entry, allMobEntityIds, specialInfoData);
+            applyLootBlacklist(structureId, entry, blacklistData);
+            refreshDerivedData(entry, lootResolver);
+        }
+
+        entries.clear();
+        entries.addAll(entriesById.values());
+    }
+
+    private static void mergeExportLootBindings(StructureIndexCache.StructureEntry entry, List<StructureLootBinding> bindings, LootTableItemResolver lootResolver, String structureId) {
+        if (entry == null || bindings == null || bindings.isEmpty()) {
+            return;
+        }
+        for (StructureLootBinding source : bindings) {
+            if (source == null) {
+                continue;
+            }
+            StructureIndexCache.LootBinding target = findMatchingLootBinding(entry, source);
+            if (target == null) {
+                target = new StructureIndexCache.LootBinding();
+                target.templateId = "exports:" + structureId;
+                target.blockId = source.blockId != null ? source.blockId : "";
+                if (!target.blockId.isBlank()) {
+                    entry.containers.add(target);
+                } else {
+                    entry.manualLootBindings.add(target);
+                }
+            }
+            mergeExportLootBinding(target, source, lootResolver);
+        }
+    }
+
+    private static StructureIndexCache.LootBinding findMatchingLootBinding(StructureIndexCache.StructureEntry entry, StructureLootBinding source) {
+        List<List<StructureIndexCache.LootBinding>> groups = List.of(entry.containers, entry.suspiciousBlocks, entry.manualLootBindings);
+        for (List<StructureIndexCache.LootBinding> group : groups) {
+            for (StructureIndexCache.LootBinding target : group) {
+                if (matchesLootBinding(target, source)) {
+                    return target;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean matchesLootBinding(StructureIndexCache.LootBinding target, StructureLootBinding source) {
+        if (target == null || source == null) {
+            return false;
+        }
+        String targetBlockId = target.blockId != null ? target.blockId : "";
+        String sourceBlockId = source.blockId != null ? source.blockId : "";
+        if (!targetBlockId.isBlank() || !sourceBlockId.isBlank()) {
+            if (targetBlockId.isBlank() || !targetBlockId.equals(sourceBlockId)) {
+                return false;
+            }
+        }
+        LinkedHashSet<String> targetLootTableIds = new LinkedHashSet<>();
+        if (target.lootTableId != null && !target.lootTableId.isBlank()) {
+            targetLootTableIds.add(target.lootTableId);
+        }
+        for (StructureIndexCache.LootTableDetail detail : target.lootTables) {
+            if (detail != null && detail.lootTableId != null && !detail.lootTableId.isBlank()) {
+                targetLootTableIds.add(detail.lootTableId);
+            }
+        }
+        LinkedHashSet<String> sourceLootTableIds = new LinkedHashSet<>(source.lootTables != null ? source.lootTables : List.of());
+        if (!targetLootTableIds.isEmpty() && !sourceLootTableIds.isEmpty()) {
+            sourceLootTableIds.retainAll(targetLootTableIds);
+            return !sourceLootTableIds.isEmpty();
+        }
+        if (!targetLootTableIds.isEmpty() || !sourceLootTableIds.isEmpty()) {
+            return true;
+        }
+        LinkedHashSet<String> targetItemIds = new LinkedHashSet<>(target.itemIds != null ? target.itemIds : List.of());
+        LinkedHashSet<String> sourceItemIds = new LinkedHashSet<>(source.items != null ? source.items : List.of());
+        return targetItemIds.isEmpty() || sourceItemIds.isEmpty() || !java.util.Collections.disjoint(targetItemIds, sourceItemIds);
+    }
+
+    private static void mergeExportLootBinding(StructureIndexCache.LootBinding target, StructureLootBinding source, LootTableItemResolver lootResolver) {
+        if (target == null || source == null) {
+            return;
+        }
+        LinkedHashSet<String> tableIds = new LinkedHashSet<>();
+        if (target.lootTableId != null && !target.lootTableId.isBlank()) {
+            tableIds.add(target.lootTableId);
+        }
+        for (StructureIndexCache.LootTableDetail detail : target.lootTables) {
+            if (detail != null && detail.lootTableId != null && !detail.lootTableId.isBlank()) {
+                tableIds.add(detail.lootTableId);
+            }
+        }
+        tableIds.addAll(source.lootTables);
+        for (StructureIndexCache.LootTableDetail detail : source.lootTableDetails) {
+            if (detail != null && detail.lootTableId != null && !detail.lootTableId.isBlank()) {
+                tableIds.add(detail.lootTableId);
+            }
+        }
+        if ((target.lootTableId == null || target.lootTableId.isBlank()) && !tableIds.isEmpty()) {
+            target.lootTableId = tableIds.iterator().next();
+        }
+
+        target.storedItemIds = mergeLists(target.storedItemIds, source.storedItems);
+        target.itemIds = mergeLists(target.itemIds, source.items);
+        for (String tableId : tableIds) {
+            StructureIndexCache.LootTableDetail capturedDetail = findLootTableDetail(source.lootTableDetails, tableId);
+            if (capturedDetail != null && capturedDetail.entries != null && !capturedDetail.entries.isEmpty()) {
+                mergeLootTableDetail(target, capturedDetail, true);
+                continue;
+            }
+            if (findLootTableDetail(target.lootTables, tableId) == null && lootResolver != null) {
+                StructureIndexCache.LootTableDetail resolvedDetail = buildLootTableDetail(tableId, lootResolver);
+                if (resolvedDetail != null) {
+                    mergeLootTableDetail(target, resolvedDetail, false);
+                }
+            }
+        }
+        for (StructureIndexCache.LootTableDetail detail : source.lootTableDetails) {
+            mergeLootTableDetail(target, detail, true);
+        }
+        LinkedHashSet<String> itemIds = new LinkedHashSet<>(target.itemIds != null ? target.itemIds : List.of());
+        itemIds.addAll(target.storedItemIds != null ? target.storedItemIds : List.of());
+        for (StructureIndexCache.LootTableDetail detail : target.lootTables) {
+            if (detail == null || detail.entries == null) {
+                continue;
+            }
+            for (StructureIndexCache.LootItemEntry itemEntry : detail.entries) {
+                if (itemEntry != null && itemEntry.itemId != null && !itemEntry.itemId.isBlank()) {
+                    itemIds.add(itemEntry.itemId);
+                }
+            }
+        }
+        target.itemIds = new ArrayList<>(itemIds);
+    }
+
+    private static void mergeLootTableDetail(StructureIndexCache.LootBinding target, StructureIndexCache.LootTableDetail incoming, boolean captured) {
+        if (target == null || incoming == null || incoming.lootTableId == null || incoming.lootTableId.isBlank()) {
+            return;
+        }
+        for (int index = 0; index < target.lootTables.size(); index++) {
+            StructureIndexCache.LootTableDetail existing = target.lootTables.get(index);
+            if (existing != null && incoming.lootTableId.equals(existing.lootTableId)) {
+                if (captured && incoming.entries != null && !incoming.entries.isEmpty()) {
+                    target.lootTables.set(index, copyLootTableDetail(incoming));
+                }
+                return;
+            }
+        }
+        target.lootTables.add(copyLootTableDetail(incoming));
+    }
+
+    private static StructureIndexCache.LootTableDetail findLootTableDetail(List<StructureIndexCache.LootTableDetail> details, String lootTableId) {
+        if (details == null || lootTableId == null || lootTableId.isBlank()) {
+            return null;
+        }
+        for (StructureIndexCache.LootTableDetail detail : details) {
+            if (detail != null && lootTableId.equals(detail.lootTableId)) {
+                return detail;
+            }
+        }
+        return null;
+    }
+
+    private static StructureIndexCache.LootTableDetail copyLootTableDetail(StructureIndexCache.LootTableDetail source) {
+        StructureIndexCache.LootTableDetail copy = new StructureIndexCache.LootTableDetail();
+        if (source == null) {
+            return copy;
+        }
+        copy.lootTableId = source.lootTableId != null ? source.lootTableId : "";
+        if (source.entries != null) {
+            for (StructureIndexCache.LootItemEntry sourceEntry : source.entries) {
+                if (sourceEntry == null) {
+                    continue;
+                }
+                StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
+                entry.itemId = sourceEntry.itemId != null ? sourceEntry.itemId : "";
+                entry.weight = sourceEntry.weight;
+                entry.quality = sourceEntry.quality;
+                entry.rollsText = sourceEntry.rollsText != null ? sourceEntry.rollsText : "";
+                entry.bonusRollsText = sourceEntry.bonusRollsText != null ? sourceEntry.bonusRollsText : "";
+                entry.chanceText = sourceEntry.chanceText != null ? sourceEntry.chanceText : "";
+                entry.countText = sourceEntry.countText != null ? sourceEntry.countText : "";
+                entry.chanceNotes = copyLootTextEntries(sourceEntry.chanceNotes);
+                entry.countNotes = copyLootTextEntries(sourceEntry.countNotes);
+                copy.entries.add(entry);
+            }
+        }
+        return copy;
+    }
+
+    private static List<StructureIndexCache.LootTextEntry> copyLootTextEntries(List<StructureIndexCache.LootTextEntry> source) {
+        List<StructureIndexCache.LootTextEntry> copy = new ArrayList<>();
+        if (source == null) {
+            return copy;
+        }
+        for (StructureIndexCache.LootTextEntry sourceEntry : source) {
+            if (sourceEntry == null) {
+                continue;
+            }
+            StructureIndexCache.LootTextEntry entry = new StructureIndexCache.LootTextEntry();
+            entry.translationKey = sourceEntry.translationKey != null ? sourceEntry.translationKey : "";
+            entry.args = sourceEntry.args != null ? new ArrayList<>(sourceEntry.args) : new ArrayList<>();
+            copy.add(entry);
+        }
+        return copy;
+    }
+
+    private static void refreshDerivedData(StructureIndexCache.StructureEntry entry, LootTableItemResolver lootResolver) {
+        if (entry == null) {
+            return;
+        }
         LinkedHashSet<String> entityLootItems = new LinkedHashSet<>();
         LinkedHashSet<String> mobEggItemIds = new LinkedHashSet<>();
-        for (String entityId : allMobEntityIds) {
+        List<String> mobIds = entry.allMobEntityIds != null ? entry.allMobEntityIds : List.of();
+        for (String entityId : mobIds) {
             EntityType<?> entityType = ForgeRegistries.ENTITY_TYPES.getValue(ResourceLocation.tryParse(entityId));
             if (entityType == null) {
                 continue;
@@ -193,27 +474,14 @@ public final class StructureIndexExporter {
                 }
             }
             ResourceLocation lootTable = entityType.getDefaultLootTable();
-            if (lootTable == null) {
-                continue;
+            if (lootTable != null) {
+                entityLootItems.addAll(lootResolver.resolveLootItems(lootTable));
             }
-            entityLootItems.addAll(lootResolver.resolveLootItems(lootTable));
         }
+        mergeResolvedLootItems(entry.containers, lootResolver);
+        mergeResolvedLootItems(entry.suspiciousBlocks, lootResolver);
+        mergeResolvedLootItems(entry.manualLootBindings, lootResolver);
 
-        for (StructureIndexCache.LootBinding binding : entry.containers) {
-            mergeResolvedLootItems(binding, lootResolver);
-        }
-        for (StructureIndexCache.LootBinding binding : entry.suspiciousBlocks) {
-            mergeResolvedLootItems(binding, lootResolver);
-        }
-
-        applyConfiguredLootBindings(structureId, entry, lootResolver, bindingData, blacklistData);
-        applyLootBlacklist(structureId, entry, blacklistData);
-
-        entry.templateIds = new ArrayList<>(templateIds);
-        entry.spawnOverridesEntities = new ArrayList<>(spawnOverrideEntities);
-        entry.templateEntities = new ArrayList<>(templateEntities);
-        entry.spawnedEntities = mergeOrdered(spawnOverrideEntities, templateEntities);
-        entry.allMobEntityIds = new ArrayList<>(allMobEntityIds);
         entry.allMobEggItemIds = new ArrayList<>(mobEggItemIds);
         entry.entityLootItems = new ArrayList<>(entityLootItems);
         entry.containerLootItems = mergeLists(flattenItems(entry.containers), flattenItems(entry.manualLootBindings));
@@ -222,16 +490,15 @@ public final class StructureIndexExporter {
         entry.allContainerLootItemIds = new ArrayList<>(entry.containerLootItems);
         entry.allSuspiciousLootItemIds = new ArrayList<>(entry.suspiciousLootItems);
         entry.allLootItemIds = mergeOrdered(entityLootItems, new LinkedHashSet<>(entry.containerLootItems), new LinkedHashSet<>(entry.suspiciousLootItems));
-        JeiStructures.LOGGER.debug(
-                "Structure {} export finished. Templates: {}, mobs: {}, spawners: {}, containers: {}, suspicious blocks: {}",
-                structureId,
-                entry.templateIds.size(),
-                entry.allMobEntityIds.size(),
-                entry.spawners.size(),
-                entry.containers.size(),
-                entry.suspiciousBlocks.size()
-        );
-        return entry;
+    }
+
+    private static void mergeResolvedLootItems(List<StructureIndexCache.LootBinding> bindings, LootTableItemResolver lootResolver) {
+        if (bindings == null) {
+            return;
+        }
+        for (StructureIndexCache.LootBinding binding : bindings) {
+            mergeResolvedLootItems(binding, lootResolver);
+        }
     }
 
     private static void applyConfiguredMobBindings(ResourceLocation structureId, LinkedHashSet<String> allMobEntityIds, StructureBindingData bindingData) {
@@ -331,6 +598,23 @@ public final class StructureIndexExporter {
         if (binding == null || blacklistData == null) {
             return;
         }
+        boolean hadDetailItemsBeforeFiltering = false;
+        if (binding.lootTables != null) {
+            for (StructureIndexCache.LootTableDetail detail : binding.lootTables) {
+                if (detail == null || detail.entries == null) {
+                    continue;
+                }
+                for (StructureIndexCache.LootItemEntry entry : detail.entries) {
+                    if (entry != null && entry.itemId != null && !entry.itemId.isBlank()) {
+                        hadDetailItemsBeforeFiltering = true;
+                        break;
+                    }
+                }
+                if (hadDetailItemsBeforeFiltering) {
+                    break;
+                }
+            }
+        }
         if (binding.lootTableId != null && !binding.lootTableId.isBlank() && blacklistData.isLootTableBlocked(structureId, binding.lootTableId)) {
             binding.lootTableId = "";
         }
@@ -341,9 +625,14 @@ public final class StructureIndexExporter {
             binding.lootTableId = binding.lootTables == null || binding.lootTables.isEmpty() ? "" : binding.lootTables.get(0).lootTableId;
         }
         LinkedHashSet<String> itemIds = new LinkedHashSet<>();
+        LinkedHashSet<String> existingItemIds = new LinkedHashSet<>();
+        if (binding.itemIds != null) {
+            existingItemIds.addAll(binding.itemIds);
+        }
         if (binding.storedItemIds != null) {
             itemIds.addAll(binding.storedItemIds);
         }
+        boolean hasDetailItems = false;
         if (binding.lootTables != null) {
             for (StructureIndexCache.LootTableDetail detail : binding.lootTables) {
                 if (detail == null || detail.entries == null) {
@@ -352,9 +641,13 @@ public final class StructureIndexExporter {
                 for (StructureIndexCache.LootItemEntry entry : detail.entries) {
                     if (entry != null && entry.itemId != null && !entry.itemId.isBlank()) {
                         itemIds.add(entry.itemId);
+                        hasDetailItems = true;
                     }
                 }
             }
+        }
+        if (!hasDetailItems && !hadDetailItemsBeforeFiltering) {
+            itemIds.addAll(existingItemIds);
         }
         binding.itemIds = new ArrayList<>(itemIds);
     }
@@ -369,18 +662,38 @@ public final class StructureIndexExporter {
     }
 
     private static void mergeResolvedLootItems(StructureIndexCache.LootBinding binding, LootTableItemResolver lootResolver) {
-        if (binding == null) {
+        if (binding == null || lootResolver == null) {
             return;
         }
-        LinkedHashSet<String> itemIds = new LinkedHashSet<>(binding.storedItemIds);
+        LinkedHashSet<String> itemIds = new LinkedHashSet<>(binding.itemIds != null ? binding.itemIds : List.of());
+        itemIds.addAll(binding.storedItemIds != null ? binding.storedItemIds : List.of());
+        LinkedHashSet<String> tableIds = new LinkedHashSet<>();
         if (binding.lootTableId != null && !binding.lootTableId.isBlank()) {
-            if (binding.lootTables.isEmpty()) {
-                StructureIndexCache.LootTableDetail detail = buildLootTableDetail(binding.lootTableId, lootResolver);
+            tableIds.add(binding.lootTableId);
+        }
+        for (StructureIndexCache.LootTableDetail existingDetail : binding.lootTables) {
+            if (existingDetail != null && existingDetail.lootTableId != null && !existingDetail.lootTableId.isBlank()) {
+                tableIds.add(existingDetail.lootTableId);
+            }
+        }
+        for (String tableId : tableIds) {
+            if (findLootTableDetail(binding.lootTables, tableId) == null) {
+                StructureIndexCache.LootTableDetail detail = buildLootTableDetail(tableId, lootResolver);
                 if (detail != null) {
                     binding.lootTables.add(detail);
                 }
             }
-            itemIds.addAll(lootResolver.resolveLootItems(ResourceLocation.tryParse(binding.lootTableId)));
+            itemIds.addAll(lootResolver.resolveLootItems(ResourceLocation.tryParse(tableId)));
+        }
+        for (StructureIndexCache.LootTableDetail detail : binding.lootTables) {
+            if (detail == null || detail.entries == null) {
+                continue;
+            }
+            for (StructureIndexCache.LootItemEntry entry : detail.entries) {
+                if (entry != null && entry.itemId != null && !entry.itemId.isBlank()) {
+                    itemIds.add(entry.itemId);
+                }
+            }
         }
         binding.itemIds = new ArrayList<>(itemIds);
     }
@@ -390,6 +703,12 @@ public final class StructureIndexExporter {
             return;
         }
         LinkedHashSet<String> seen = new LinkedHashSet<>();
+        for (StructureIndexCache.SpecialInfoEntry infoEntry : entry.specialInfos) {
+            if (infoEntry == null || infoEntry.targetType == null || infoEntry.targetId == null) {
+                continue;
+            }
+            seen.add(infoEntry.targetType + ":" + infoEntry.targetId);
+        }
         for (String blockId : entry.specialDisplayBlocks) {
             String translationKey = specialInfoData.getBlockTranslations().get(blockId);
             if (translationKey == null || translationKey.isBlank()) {
