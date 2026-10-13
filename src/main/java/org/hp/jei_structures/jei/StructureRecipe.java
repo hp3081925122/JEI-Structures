@@ -398,6 +398,7 @@ public final class StructureRecipe {
             copy.templateId = valueOrEmpty(binding.templateId);
             copy.blockId = valueOrEmpty(binding.blockId);
             copy.lootTableId = valueOrEmpty(binding.lootTableId);
+            copy.lootTableIds = copyStrings(binding.lootTableIds);
             copy.storedItemIds = copyStrings(binding.storedItemIds);
             copy.itemIds = copyStrings(binding.itemIds);
             copy.lootTables = copyLootTableDetails(binding.lootTables);

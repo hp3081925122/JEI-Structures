@@ -3,14 +3,18 @@ package org.hp.jei_structures.data;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.io.Serializable;
+import java.util.LinkedHashSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public final class StructureIndexCache {
+public final class StructureIndexCache implements Serializable {
 
-    public static final int CURRENT_VERSION = 11;
+    private static final long serialVersionUID = 1L;
+
+    public static final int CURRENT_VERSION = 12;
     public static final Gson GSON = new GsonBuilder()
             .disableHtmlEscaping()
             .setPrettyPrinting()
@@ -19,8 +23,122 @@ public final class StructureIndexCache {
     public int version = CURRENT_VERSION;
     public String generatedAt = "";
     public List<StructureEntry> structures = new ArrayList<>();
+    public Map<String, LootTableDetail> lootTableDetails = new LinkedHashMap<>();
 
-    public static final class StructureEntry {
+    public void compactLootTables() {
+        if (lootTableDetails == null) {
+            lootTableDetails = new LinkedHashMap<>();
+        }
+        for (StructureEntry structure : structures) {
+            if (structure == null) {
+                continue;
+            }
+            collectLootTables(structure.containers, true);
+            collectLootTables(structure.suspiciousBlocks, true);
+            collectLootTables(structure.manualLootBindings, true);
+        }
+        version = CURRENT_VERSION;
+    }
+
+    public boolean prepareRuntimeLootTables() {
+        if (version != CURRENT_VERSION) {
+            return false;
+        }
+        if (lootTableDetails == null) {
+            lootTableDetails = new LinkedHashMap<>();
+        }
+        for (StructureEntry structure : structures) {
+            if (structure == null) {
+                continue;
+            }
+            collectLootTables(structure.containers, false);
+            collectLootTables(structure.suspiciousBlocks, false);
+            collectLootTables(structure.manualLootBindings, false);
+        }
+        for (StructureEntry structure : structures) {
+            if (structure == null) {
+                continue;
+            }
+            resolveLootTables(structure.containers);
+            resolveLootTables(structure.suspiciousBlocks);
+            resolveLootTables(structure.manualLootBindings);
+        }
+        return true;
+    }
+
+    private void collectLootTables(List<LootBinding> bindings, boolean compact) {
+        if (bindings == null) {
+            return;
+        }
+        for (LootBinding binding : bindings) {
+            if (binding == null) {
+                continue;
+            }
+            LinkedHashSet<String> ids = new LinkedHashSet<>();
+            if (binding.lootTableIds != null) {
+                ids.addAll(binding.lootTableIds);
+            }
+            if (binding.lootTableId != null && !binding.lootTableId.isBlank()) {
+                ids.add(binding.lootTableId);
+            }
+            if (binding.lootTables != null) {
+                for (LootTableDetail detail : binding.lootTables) {
+                    if (detail == null || detail.lootTableId == null || detail.lootTableId.isBlank()) {
+                        continue;
+                    }
+                    LootTableDetail existing = lootTableDetails.get(detail.lootTableId);
+                    if (existing == null || lootTableDetailScore(detail) > lootTableDetailScore(existing)) {
+                        lootTableDetails.put(detail.lootTableId, detail);
+                    }
+                    ids.add(detail.lootTableId);
+                }
+            }
+            ids.removeIf(id -> id == null || id.isBlank());
+            binding.lootTableIds = new ArrayList<>(ids);
+            if (compact) {
+                binding.lootTables = new ArrayList<>();
+            }
+        }
+    }
+
+    private void resolveLootTables(List<LootBinding> bindings) {
+        if (bindings == null) {
+            return;
+        }
+        for (LootBinding binding : bindings) {
+            if (binding == null) {
+                continue;
+            }
+            List<LootTableDetail> resolved = new ArrayList<>();
+            for (String id : binding.lootTableIds) {
+                LootTableDetail detail = lootTableDetails.get(id);
+                if (detail != null) {
+                    resolved.add(detail);
+                }
+            }
+            binding.lootTables = resolved;
+        }
+    }
+
+    private static int lootTableDetailScore(LootTableDetail detail) {
+        if (detail.entries == null) {
+            return 0;
+        }
+        int score = detail.entries.size() * 100;
+        for (LootItemEntry entry : detail.entries) {
+            if (entry != null) {
+                score += entry.chanceNotes != null ? entry.chanceNotes.size() : 0;
+                score += entry.countNotes != null ? entry.countNotes.size() : 0;
+                score += entry.chanceText != null && !entry.chanceText.isBlank() ? 1 : 0;
+                score += entry.countText != null && !entry.countText.isBlank() ? 1 : 0;
+            }
+        }
+        return score;
+    }
+
+    public static final class StructureEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String structureId = "";
         public String structureType = "";
         public String generationStep = "";
@@ -50,38 +168,51 @@ public final class StructureIndexCache {
         public List<LootBinding> manualLootBindings = new ArrayList<>();
     }
 
-    public static final class SpawnerEntry {
+    public static final class SpawnerEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String templateId = "";
         public String entityId = "";
     }
 
-    public static final class GenerationBiomeGroup {
+    public static final class GenerationBiomeGroup implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String selector = "";
         public String selectorType = "";
         public List<String> resolvedBiomeIds = new ArrayList<>();
     }
 
-    public static final class LootBinding {
+    public static final class LootBinding implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String templateId = "";
         public String blockId = "";
         public String lootTableId = "";
+        public List<String> lootTableIds = new ArrayList<>();
         public List<String> storedItemIds = new ArrayList<>();
         public List<String> itemIds = new ArrayList<>();
         public List<LootTableDetail> lootTables = new ArrayList<>();
     }
 
-    public static final class SpecialInfoEntry {
+    public static final class SpecialInfoEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String targetType = "";
         public String targetId = "";
         public String translationKey = "";
     }
 
-    public static final class LootTableDetail {
+    public static final class LootTableDetail implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String lootTableId = "";
         public List<LootItemEntry> entries = new ArrayList<>();
     }
 
-    public static final class LootItemEntry {
+    public static final class LootItemEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String itemId = "";
         public int weight;
         public int quality;
@@ -93,7 +224,9 @@ public final class StructureIndexCache {
         public List<LootTextEntry> countNotes = new ArrayList<>();
     }
 
-    public static final class LootTextEntry {
+    public static final class LootTextEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
         public String translationKey = "";
         public List<String> args = new ArrayList<>();
     }

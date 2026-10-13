@@ -128,8 +128,13 @@ After collection is finished, run:
 `export` automatically merges static structure scans, configs, data pack bindings, and captured results in `exports`, then generates the shared JEI/EMI index file:
 
 ```text
-config/jei_structures/structure_index.json
+config/jei_structures/structure_index.cache
 ```
+
+
+该索引采用 GZIP 压缩二进制格式，同一战利品表的详细条目只共享保存一次。只有旧版 structure_index.json 时会自动转换并保留原 JSON；重新执行 export 成功后会删除过时 JSON。二进制索引不能直接作为 JSON 编辑。
+
+The index uses GZIP-compressed binary storage with shared loot table details. A legacy structure_index.json is automatically converted and preserved when no binary cache exists; a successful export removes the obsolete JSON. The binary index cannot be edited as JSON.
 
 `exports` 中同一结构、方块和战利品表的实测详细信息会优先于静态解析结果，同时补充静态扫描无法发现的生物和战利品。即使结构没有可直接读取的结构 JSON，只要 `exports` 中有有效捕获文件，也会生成一个可显示的最小结构条目。
 
