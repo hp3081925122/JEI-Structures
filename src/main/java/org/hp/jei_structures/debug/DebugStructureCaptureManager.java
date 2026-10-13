@@ -1481,15 +1481,14 @@ public final class DebugStructureCaptureManager {
         }
 
         private void addLootTable(StructureIndexCache.LootTableDetail detail) {
-            StructureIndexCache.LootTableDetail existing = lootTables.get(detail.lootTableId);
-            if (existing == null) {
-                StructureIndexCache.LootTableDetail copy = new StructureIndexCache.LootTableDetail();
-                copy.lootTableId = detail.lootTableId;
-                copy.entries.addAll(detail.entries);
-                lootTables.put(copy.lootTableId, copy);
+            if (lootTables.containsKey(detail.lootTableId)) {
+                JeiStructures.LOGGER.debug("Skipping repeated structure loot table details: block={}, table={}, entries={}", blockId, detail.lootTableId, detail.entries.size());
                 return;
             }
-            existing.entries.addAll(detail.entries);
+            StructureIndexCache.LootTableDetail copy = new StructureIndexCache.LootTableDetail();
+            copy.lootTableId = detail.lootTableId;
+            copy.entries.addAll(detail.entries);
+            lootTables.put(copy.lootTableId, copy);
         }
 
         private void addStoredItemStack(StructureIndexCache.ItemStackSnapshot snapshot) {
