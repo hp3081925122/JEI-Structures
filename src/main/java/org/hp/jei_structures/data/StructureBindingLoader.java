@@ -190,9 +190,18 @@ public final class StructureBindingLoader {
         StructureLootBinding binding = new StructureLootBinding();
         binding.structureId = getString(json, "structure_id");
         binding.blockId = getString(json, "block_id");
-        binding.lootTables = readStringArray(json.get("loot_tables"));
-        binding.items = readStringArray(json.get("items"));
-        binding.storedItems = readStringArray(json.get("stored_items"));
+        binding.lootTables = new ArrayList<>(readStringArray(json.get("loot_tables")));
+        binding.items = new ArrayList<>(readStringArray(json.get("items")));
+        binding.storedItems = new ArrayList<>(readStringArray(json.get("stored_items")));
+        binding.storedItemStacks = readStoredItemStacks(json.get("stored_item_stacks"));
+        for (StructureIndexCache.ItemStackEntry stack : binding.storedItemStacks) {
+            if (!binding.storedItems.contains(stack.itemId)) {
+                binding.storedItems.add(stack.itemId);
+            }
+            if (!binding.items.contains(stack.itemId)) {
+                binding.items.add(stack.itemId);
+            }
+        }
         binding.lootTableDetails = readLootTableDetails(json.get("loot_table_details"));
         for (StructureIndexCache.LootTableDetail detail : binding.lootTableDetails) {
             if (detail != null && !detail.lootTableId.isBlank() && !binding.lootTables.contains(detail.lootTableId)) {
@@ -206,6 +215,23 @@ public final class StructureBindingLoader {
             return null;
         }
         return binding;
+    }
+
+    private static List<StructureIndexCache.ItemStackEntry> readStoredItemStacks(JsonElement element) {
+        List<StructureIndexCache.ItemStackEntry> result = new ArrayList<>();
+        if (element != null && element.isJsonArray()) {
+            for (JsonElement child : element.getAsJsonArray()) {
+                if (child.isJsonObject()) {
+                    StructureIndexCache.ItemStackEntry entry = new StructureIndexCache.ItemStackEntry();
+                    entry.itemId = getString(child.getAsJsonObject(), "item_id");
+                    entry.tagSnbt = getString(child.getAsJsonObject(), "tag_snbt");
+                    if (!entry.itemId.isBlank()) {
+                        result.add(entry);
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     private static List<StructureIndexCache.LootTableDetail> readLootTableDetails(JsonElement element) {
@@ -242,6 +268,8 @@ public final class StructureBindingLoader {
             JsonObject object = child.getAsJsonObject();
             StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
             entry.itemId = getString(object, "item_id");
+            entry.tagSnbt = getString(object, "tag_snbt");
+            entry.itemFunctions = readOrderedFunctions(object.get("item_functions"));
             entry.weight = getInt(object, "weight", 0);
             entry.quality = getInt(object, "quality", 0);
             entry.rollsText = getString(object, "rolls_text");
@@ -395,6 +423,18 @@ public final class StructureBindingLoader {
                 }
             }
         }
+    }
+
+    private static List<String> readOrderedFunctions(JsonElement element) {
+        List<String> result = new ArrayList<>();
+        if (element != null && element.isJsonArray()) {
+            for (JsonElement value : element.getAsJsonArray()) {
+                if (value.isJsonPrimitive() && !value.getAsString().isBlank()) {
+                    result.add(value.getAsString());
+                }
+            }
+        }
+        return result;
     }
 
     private static List<String> readStringArray(JsonElement element) {

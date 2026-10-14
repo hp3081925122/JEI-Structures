@@ -114,7 +114,7 @@ public final class StructureIndexCacheLoader {
         StructureIndexCache cache;
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             cache = StructureIndexCache.GSON.fromJson(reader, StructureIndexCache.class);
-            if (cache == null || (cache.version != LEGACY_JSON_VERSION && cache.version != StructureIndexCache.CURRENT_VERSION)) {
+            if (cache == null || (cache.version != LEGACY_JSON_VERSION && cache.version != 12 && cache.version != StructureIndexCache.CURRENT_VERSION)) {
                 JeiStructures.LOGGER.warn("Unsupported legacy structure index JSON version: {}", path);
                 return new StructureIndexCache();
             }

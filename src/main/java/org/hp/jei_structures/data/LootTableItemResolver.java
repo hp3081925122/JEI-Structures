@@ -36,6 +36,7 @@ public final class LootTableItemResolver {
     private final Map<String, StructureIndexCache.LootTableDetail> detailCache = new HashMap<>();
     private final Set<String> resolvingItems = new HashSet<>();
     private final Set<String> resolvingDetails = new HashSet<>();
+    private final Set<String> availableDetails = new HashSet<>();
 
     public LootTableItemResolver(ResourceManager resourceManager, Registry<Item> itemRegistry) {
         this.resourceManager = resourceManager;
@@ -97,6 +98,11 @@ public final class LootTableItemResolver {
         }
     }
 
+    public StructureIndexCache.LootTableDetail resolveCurrentLootTableDetail(ResourceLocation lootTableId) {
+        StructureIndexCache.LootTableDetail detail = resolveLootTableDetail(lootTableId);
+        return lootTableId != null && availableDetails.contains(lootTableId.toString()) ? detail : null;
+    }
+
     private StructureIndexCache.LootTableDetail buildLootTableDetail(ResourceLocation lootTableId) {
         StructureIndexCache.LootTableDetail detail = new StructureIndexCache.LootTableDetail();
         detail.lootTableId = lootTableId.toString();
@@ -105,6 +111,7 @@ public final class LootTableItemResolver {
             JeiStructures.LOGGER.debug("Loot table resource was not found: {}", lootTableId);
             return detail;
         }
+        availableDetails.add(lootTableId.toString());
         JsonArray pools = getArray(json, "pools");
         if (pools == null) {
             return detail;
@@ -122,8 +129,11 @@ public final class LootTableItemResolver {
             String rollsText = describeNumberProvider(pool.get("rolls"), "1");
             String bonusRollsText = describeNumberProvider(pool.get("bonus_rolls"), "0");
             List<StructureIndexCache.LootTextEntry> poolConditions = describeConditions(pool.get("conditions"));
+            List<String> itemFunctions = functionJsons(pool.get("functions"));
+            itemFunctions.addAll(functionJsons(json.get("functions")));
+            List<StructureIndexCache.LootTextEntry> functionNotes = mergeNotes(describeFunctions(pool.get("functions")), describeFunctions(json.get("functions")));
             for (JsonElement entryElement : entries) {
-                appendEntries(detail.entries, lootTableId, entryElement, totalWeight, rollsText, bonusRollsText, poolConditions, List.of());
+                appendEntries(detail.entries, lootTableId, entryElement, totalWeight, rollsText, bonusRollsText, poolConditions, functionNotes, itemFunctions);
             }
         }
         detail.entries.sort(Comparator
@@ -132,7 +142,7 @@ public final class LootTableItemResolver {
         return detail;
     }
 
-    private void appendEntries(List<StructureIndexCache.LootItemEntry> output, ResourceLocation rootLootTableId, JsonElement element, int totalWeight, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> inheritedChanceNotes, List<StructureIndexCache.LootTextEntry> inheritedCountNotes) {
+    private void appendEntries(List<StructureIndexCache.LootItemEntry> output, ResourceLocation rootLootTableId, JsonElement element, int totalWeight, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> inheritedChanceNotes, List<StructureIndexCache.LootTextEntry> inheritedCountNotes, List<String> inheritedFunctions) {
         if (element == null || !element.isJsonObject()) {
             return;
         }
@@ -140,6 +150,8 @@ public final class LootTableItemResolver {
         String type = getString(object, "type");
         List<StructureIndexCache.LootTextEntry> mergedChanceNotes = mergeNotes(inheritedChanceNotes, describeConditions(object.get("conditions")));
         List<StructureIndexCache.LootTextEntry> mergedCountNotes = mergeNotes(inheritedCountNotes, describeFunctions(object.get("functions")));
+        List<String> mergedFunctions = functionJsons(object.get("functions"));
+        mergedFunctions.addAll(inheritedFunctions);
         int weight = Math.max(getInt(object, "weight", 1), 1);
         int quality = getInt(object, "quality", 0);
         List<StructureIndexCache.LootTextEntry> chanceNotes = mergeNotes(List.of(buildRelativeWeightNote(weight, totalWeight)), mergedChanceNotes);
@@ -147,7 +159,7 @@ public final class LootTableItemResolver {
         if ("minecraft:item".equals(type)) {
             ResourceLocation itemId = getResourceLocation(object, "name");
             if (itemId != null && ForgeRegistries.ITEMS.containsKey(itemId)) {
-                output.add(createLootItemEntry(itemId.toString(), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes)));
+                output.add(createLootItemEntry(itemId.toString(), weight, quality, rollsText, bonusRollsText, chanceNotes, finalizeCountNotes(mergedCountNotes), mergedFunctions));
             }
             return;
         }
@@ -160,7 +172,7 @@ public final class LootTableItemResolver {
             List<String> tagItems = expandTag(tagId);
             List<StructureIndexCache.LootTextEntry> tagChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.tag_expansion", tagId.toString())));
             for (String itemId : tagItems) {
-                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes)));
+                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, tagChanceNotes, finalizeCountNotes(mergedCountNotes), mergedFunctions));
             }
             return;
         }
@@ -171,8 +183,16 @@ public final class LootTableItemResolver {
                 return;
             }
             List<StructureIndexCache.LootTextEntry> childChanceNotes = mergeNotes(chanceNotes, List.of(note("jei_structures.loot_note.nested_loot_table", childLootTable.toString())));
-            for (String itemId : resolveLootItems(childLootTable)) {
-                output.add(createLootItemEntry(itemId, weight, quality, rollsText, bonusRollsText, childChanceNotes, finalizeCountNotes(mergedCountNotes)));
+            StructureIndexCache.LootTableDetail childDetail = resolveLootTableDetail(childLootTable);
+            if (childDetail != null) {
+                for (StructureIndexCache.LootItemEntry child : childDetail.entries) {
+                    List<String> functions = new ArrayList<>(child.itemFunctions != null ? child.itemFunctions : List.of());
+                    functions.addAll(mergedFunctions);
+                    StructureIndexCache.LootItemEntry entry = createLootItemEntry(child.itemId, weight, quality, rollsText, bonusRollsText,
+                            mergeNotes(childChanceNotes, child.chanceNotes), finalizeCountNotes(mergeNotes(child.countNotes, mergedCountNotes)), functions);
+                    entry.tagSnbt = child.tagSnbt;
+                    output.add(entry);
+                }
             }
             return;
         }
@@ -183,7 +203,7 @@ public final class LootTableItemResolver {
                 return;
             }
             for (JsonElement child : children) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes, mergedFunctions);
             }
             return;
         }
@@ -191,13 +211,13 @@ public final class LootTableItemResolver {
         JsonArray children = getArray(object, "children");
         if (children != null) {
             for (JsonElement child : children) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes, mergedFunctions);
             }
         }
         JsonArray nestedEntries = getArray(object, "entries");
         if (nestedEntries != null) {
             for (JsonElement child : nestedEntries) {
-                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes);
+                appendEntries(output, rootLootTableId, child, totalWeight, rollsText, bonusRollsText, mergedChanceNotes, mergedCountNotes, mergedFunctions);
             }
         }
     }
@@ -233,7 +253,7 @@ public final class LootTableItemResolver {
         return Math.max(getInt(object, "weight", 1), 1);
     }
 
-    private StructureIndexCache.LootItemEntry createLootItemEntry(String itemId, int weight, int quality, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> chanceNotes, List<StructureIndexCache.LootTextEntry> countNotes) {
+    private StructureIndexCache.LootItemEntry createLootItemEntry(String itemId, int weight, int quality, String rollsText, String bonusRollsText, List<StructureIndexCache.LootTextEntry> chanceNotes, List<StructureIndexCache.LootTextEntry> countNotes, List<String> itemFunctions) {
         StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
         entry.itemId = itemId;
         entry.weight = weight;
@@ -242,9 +262,22 @@ public final class LootTableItemResolver {
         entry.bonusRollsText = fallbackText(bonusRollsText, "0");
         entry.chanceNotes = copyNotes(chanceNotes);
         entry.countNotes = copyNotes(countNotes);
+        entry.itemFunctions = new ArrayList<>(itemFunctions);
         entry.chanceText = notesToEnglish(entry.chanceNotes, "Unknown relative weight");
         entry.countText = notesToEnglish(entry.countNotes, "Default count");
         return entry;
+    }
+
+    private static List<String> functionJsons(JsonElement element) {
+        List<String> result = new ArrayList<>();
+        if (element != null && element.isJsonArray()) {
+            for (JsonElement function : element.getAsJsonArray()) {
+                if (function.isJsonObject() && function.getAsJsonObject().has("function")) {
+                    result.add(function.toString());
+                }
+            }
+        }
+        return result;
     }
 
     private StructureIndexCache.LootTextEntry buildRelativeWeightNote(int weight, int totalWeight) {
@@ -400,6 +433,8 @@ public final class LootTableItemResolver {
             }
             StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
             entry.itemId = sourceEntry.itemId != null ? sourceEntry.itemId : "";
+                entry.tagSnbt = sourceEntry.tagSnbt != null ? sourceEntry.tagSnbt : "";
+                entry.itemFunctions = sourceEntry.itemFunctions != null ? new ArrayList<>(sourceEntry.itemFunctions) : new ArrayList<>();
             entry.weight = sourceEntry.weight;
             entry.quality = sourceEntry.quality;
             entry.rollsText = sourceEntry.rollsText != null ? sourceEntry.rollsText : "";

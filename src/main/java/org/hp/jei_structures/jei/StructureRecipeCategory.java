@@ -80,6 +80,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
+
         for (StructureRecipe.ContentBlock block : recipe.getContentBlocks()) {
             for (StructureRecipe.SlotDisplay slot : block.slots()) {
                 var slotBuilder = builder.addSlot(slot.role(), getCardContentInsetX(), 0)
@@ -107,6 +108,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         if (!lookupOutputs.isEmpty()) {
             builder.addInvisibleIngredients(RecipeIngredientRole.OUTPUT).addItemStacks(lookupOutputs);
         }
+
     }
 
     @Override
@@ -117,10 +119,12 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     @Override
     public void createRecipeExtras(mezz.jei.api.gui.widgets.IRecipeExtrasBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
+
         List<IRecipeSlotDrawable> contentSlots = builder.getRecipeSlots().getSlots();
         StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT, contentSlots);
         builder.addSlottedWidget(widget, contentSlots);
         builder.addInputHandler(widget);
+
     }
 
     static void drawScrollableContents(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {

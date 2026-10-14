@@ -161,5 +161,8 @@
   "jei_structures.terrain_adjustment.none": "Does not reshape terrain",
   "jei_structures.terrain_adjustment.bury": "Can be buried into terrain",
   "jei_structures.terrain_adjustment.beard_thin": "Lightly blends into nearby terrain",
-  "jei_structures.terrain_adjustment.beard_box": "Blends broadly into nearby terrain"
+  "jei_structures.terrain_adjustment.beard_box": "Blends broadly into nearby terrain",
+  "jei_structures.tooltip.random_enchantment": "Random enchantment: type and level are determined when generated",
+  "jei_structures.tooltip.missing_variant_data": "This legacy cache lacks enchantment or potion data; capture and export again",
+  "jei_structures.tooltip.conditional_item_data": "Item data depends on loot conditions"
 }

@@ -345,8 +345,17 @@ public final class StructureIndexExporter {
         }
 
         target.storedItemIds = mergeLists(target.storedItemIds, source.storedItems);
+        StructureIndexCache.mergeItemStacks(target.storedItemStacks, source.storedItemStacks);
         target.itemIds = mergeLists(target.itemIds, source.items);
         for (String tableId : tableIds) {
+            StructureIndexCache.LootTableDetail currentDetail = lootResolver != null
+                    ? lootResolver.resolveCurrentLootTableDetail(ResourceLocation.tryParse(tableId)) : null;
+            if (currentDetail != null) {
+                target.lootTables.removeIf(detail -> detail != null && tableId.equals(detail.lootTableId));
+                target.lootTables.add(copyLootTableDetail(currentDetail));
+                JeiStructures.LOGGER.debug("Using current loot table definition instead of captured metadata: {}", tableId);
+                continue;
+            }
             StructureIndexCache.LootTableDetail capturedDetail = findLootTableDetail(source.lootTableDetails, tableId);
             if (capturedDetail != null && capturedDetail.entries != null && !capturedDetail.entries.isEmpty()) {
                 mergeLootTableDetail(target, capturedDetail, true);
@@ -358,9 +367,6 @@ public final class StructureIndexExporter {
                     mergeLootTableDetail(target, resolvedDetail, false);
                 }
             }
-        }
-        for (StructureIndexCache.LootTableDetail detail : source.lootTableDetails) {
-            mergeLootTableDetail(target, detail, true);
         }
         LinkedHashSet<String> itemIds = new LinkedHashSet<>(target.itemIds != null ? target.itemIds : List.of());
         itemIds.addAll(target.storedItemIds != null ? target.storedItemIds : List.of());
@@ -418,6 +424,8 @@ public final class StructureIndexExporter {
                 }
                 StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
                 entry.itemId = sourceEntry.itemId != null ? sourceEntry.itemId : "";
+                entry.tagSnbt = sourceEntry.tagSnbt != null ? sourceEntry.tagSnbt : "";
+                entry.itemFunctions = sourceEntry.itemFunctions != null ? new ArrayList<>(sourceEntry.itemFunctions) : new ArrayList<>();
                 entry.weight = sourceEntry.weight;
                 entry.quality = sourceEntry.quality;
                 entry.rollsText = sourceEntry.rollsText != null ? sourceEntry.rollsText : "";
@@ -522,6 +530,7 @@ public final class StructureIndexExporter {
             lootBinding.blockId = binding.blockId != null ? binding.blockId : "";
             lootBinding.lootTableId = binding.lootTables.isEmpty() ? "" : binding.lootTables.get(0);
             lootBinding.storedItemIds = new ArrayList<>(new LinkedHashSet<>(binding.items));
+            lootBinding.storedItemStacks = StructureIndexCache.copyItemStacks(binding.storedItemStacks);
             if (isLootBindingContainerBlocked(structureId, lootBinding, blacklistData)) {
                 continue;
             }
@@ -1170,6 +1179,7 @@ public final class StructureIndexExporter {
         binding.blockId = blockId;
         binding.lootTableId = lootTable;
         binding.storedItemIds = new ArrayList<>(storedItems);
+        binding.storedItemStacks = StoredItemNbtReader.readStoredItemStacks(blockEntity);
         binding.itemIds = new ArrayList<>(storedItems);
         if (SUSPICIOUS_BLOCKS.contains(blockId)) {
             result.suspiciousBlocks.add(binding);

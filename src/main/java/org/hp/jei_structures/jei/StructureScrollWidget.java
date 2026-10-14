@@ -72,6 +72,7 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
 
     @Override
     public void drawWidget(GuiGraphics guiGraphics, double mouseX, double mouseY) {
+
         scrollbarBackground.draw(guiGraphics, scrollbarArea);
         scrollbarMarker.draw(guiGraphics, getScrollbarMarkerArea());
 
@@ -85,6 +86,7 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         drawSlots(guiGraphics);
         poseStack.popPose();
         guiGraphics.disableScissor();
+
     }
 
     @Override

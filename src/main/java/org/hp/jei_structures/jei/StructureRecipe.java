@@ -10,6 +10,7 @@ import net.minecraft.world.item.Items;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.hp.jei_structures.JeiStructures;
 import org.hp.jei_structures.data.StructureIndexCache;
+import org.hp.jei_structures.data.ItemStackDisplay;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -400,6 +401,7 @@ public final class StructureRecipe {
             copy.lootTableId = valueOrEmpty(binding.lootTableId);
             copy.lootTableIds = copyStrings(binding.lootTableIds);
             copy.storedItemIds = copyStrings(binding.storedItemIds);
+            copy.storedItemStacks = StructureIndexCache.copyItemStacks(binding.storedItemStacks);
             copy.itemIds = copyStrings(binding.itemIds);
             copy.lootTables = copyLootTableDetails(binding.lootTables);
             copies.add(copy);
@@ -435,6 +437,8 @@ public final class StructureRecipe {
             }
             StructureIndexCache.LootItemEntry copy = new StructureIndexCache.LootItemEntry();
             copy.itemId = valueOrEmpty(source.itemId);
+            copy.tagSnbt = valueOrEmpty(source.tagSnbt);
+            copy.itemFunctions = copyStrings(source.itemFunctions);
             copy.weight = source.weight;
             copy.quality = source.quality;
             copy.rollsText = valueOrEmpty(source.rollsText);
@@ -688,16 +692,19 @@ public final class StructureRecipe {
         boolean first = true;
         for (StoredItemsGroup group : groups) {
             List<SlotDisplay> slots = new ArrayList<>();
-            for (String itemId : group.itemIds()) {
-                ItemStack stack = toItem(itemId);
+            for (StructureIndexCache.ItemStackEntry item : group.items()) {
+                ItemStack stack = ItemStackDisplay.create(item.itemId, item.tagSnbt, List.of());
                 if (stack.isEmpty()) {
                     continue;
                 }
                 String slotName = nextSlotName("stored_item", slotCounter);
                 slots.add(SlotDisplay.item(RecipeIngredientRole.OUTPUT, stack, slotName));
-                tooltipMap.put(slotName, List.of(
-                        Component.translatable("jei_structures.tooltip.block_id", group.blockId()).withStyle(ChatFormatting.DARK_GRAY)
-                ));
+                List<Component> tooltip = new ArrayList<>();
+                tooltip.add(Component.translatable("jei_structures.tooltip.block_id", group.blockId()).withStyle(ChatFormatting.DARK_GRAY));
+                if (item.tagSnbt == null && ItemStackDisplay.requiresVariantData(item.itemId)) {
+                    tooltip.add(Component.translatable("jei_structures.tooltip.missing_variant_data").withStyle(ChatFormatting.GRAY));
+                }
+                tooltipMap.put(slotName, List.copyOf(tooltip));
             }
             if (slots.isEmpty()) {
                 continue;
@@ -726,7 +733,8 @@ public final class StructureRecipe {
                 }
                 List<SlotDisplay> slots = new ArrayList<>();
                 for (StructureIndexCache.LootItemEntry entry : detail.entries) {
-                    ItemStack stack = toItem(entry.itemId);
+                    List<String> functions = getItemFunctions(entry);
+                    ItemStack stack = ItemStackDisplay.create(entry.itemId, entry.tagSnbt, functions);
                     if (stack.isEmpty()) {
                         continue;
                     }
@@ -782,16 +790,16 @@ public final class StructureRecipe {
     }
 
     private List<StoredItemsGroup> buildStoredItemGroups() {
-        Map<String, LinkedHashSet<String>> grouped = new LinkedHashMap<>();
+        Map<String, LinkedHashMap<String, StructureIndexCache.ItemStackEntry>> grouped = new LinkedHashMap<>();
         addStoredItems(grouped, entry.containers);
         addStoredItems(grouped, entry.suspiciousBlocks);
         addStoredItems(grouped, entry.manualLootBindings);
         List<StoredItemsGroup> groups = new ArrayList<>();
-        for (Map.Entry<String, LinkedHashSet<String>> group : grouped.entrySet()) {
+        for (Map.Entry<String, LinkedHashMap<String, StructureIndexCache.ItemStackEntry>> group : grouped.entrySet()) {
             if (group.getValue().isEmpty()) {
                 continue;
             }
-            groups.add(new StoredItemsGroup(group.getKey(), new ArrayList<>(group.getValue())));
+            groups.add(new StoredItemsGroup(group.getKey(), new ArrayList<>(group.getValue().values())));
         }
         groups.sort(Comparator
                 .comparing((StoredItemsGroup group) -> StructureTextHelper.getBlockName(group.blockId()), String.CASE_INSENSITIVE_ORDER)
@@ -816,19 +824,36 @@ public final class StructureRecipe {
         return groups;
     }
 
-    private static void addStoredItems(Map<String, LinkedHashSet<String>> grouped, List<StructureIndexCache.LootBinding> bindings) {
+    private static void addStoredItems(Map<String, LinkedHashMap<String, StructureIndexCache.ItemStackEntry>> grouped, List<StructureIndexCache.LootBinding> bindings) {
         if (bindings == null) {
             return;
         }
         for (StructureIndexCache.LootBinding binding : bindings) {
-            if (binding == null || binding.storedItemIds == null || binding.storedItemIds.isEmpty()) {
+            if (binding == null) {
                 continue;
             }
             String blockId = resolveBlockId(binding);
-            LinkedHashSet<String> items = grouped.computeIfAbsent(blockId, key -> new LinkedHashSet<>());
-            for (String itemId : binding.storedItemIds) {
+            LinkedHashMap<String, StructureIndexCache.ItemStackEntry> items = grouped.computeIfAbsent(blockId, key -> new LinkedHashMap<>());
+            for (StructureIndexCache.ItemStackEntry item : StructureIndexCache.copyItemStacks(binding.storedItemStacks)) {
+                String plainKey = item.itemId + "\u0000";
+                StructureIndexCache.ItemStackEntry plain = items.get(plainKey);
+                if (plain != null && plain.tagSnbt == null) {
+                    items.remove(plainKey);
+                }
+                items.putIfAbsent(item.itemId + "\u0000" + item.tagSnbt, item);
+            }
+            Set<String> knownItemIds = new LinkedHashSet<>();
+            for (StructureIndexCache.ItemStackEntry item : items.values()) {
+                knownItemIds.add(item.itemId);
+            }
+            for (String itemId : binding.storedItemIds != null ? binding.storedItemIds : List.<String>of()) {
                 if (itemId != null && !itemId.isBlank()) {
-                    items.add(itemId);
+                    if (knownItemIds.add(itemId)) {
+                        StructureIndexCache.ItemStackEntry item = new StructureIndexCache.ItemStackEntry();
+                        item.itemId = itemId;
+                        item.tagSnbt = null;
+                        items.put(itemId + "\u0000", item);
+                    }
                 }
             }
         }
@@ -904,7 +929,33 @@ public final class StructureRecipe {
         lines.add(Component.translatable("jei_structures.tooltip.loot_bonus_rolls", valueOrUnknown(entry.bonusRollsText)).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("jei_structures.tooltip.loot_chance", notesText(entry.chanceNotes, entry.chanceText)).withStyle(ChatFormatting.GRAY));
         lines.add(Component.translatable("jei_structures.tooltip.loot_count", notesText(entry.countNotes, entry.countText)).withStyle(ChatFormatting.GRAY));
+        lines.addAll(ItemStackDisplay.functionNotes(getItemFunctions(entry)));
+        if (ItemStackDisplay.requiresVariantData(entry.itemId) && (entry.tagSnbt == null || entry.tagSnbt.isBlank())
+                && getItemFunctions(entry).isEmpty()) {
+            lines.add(Component.translatable("jei_structures.tooltip.missing_variant_data").withStyle(ChatFormatting.GRAY));
+        }
         return List.copyOf(lines);
+    }
+
+    private static List<String> getItemFunctions(StructureIndexCache.LootItemEntry entry) {
+        if (entry.itemFunctions != null && !entry.itemFunctions.isEmpty()) {
+            return entry.itemFunctions;
+        }
+        List<String> result = new ArrayList<>();
+        if (entry.countNotes != null) {
+            for (StructureIndexCache.LootTextEntry note : entry.countNotes) {
+                if (note != null && "jei_structures.loot_note.function_type".equals(note.translationKey) && note.args != null) {
+                    for (String value : note.args) {
+                        if ("enchant randomly".equals(value)) {
+                            result.add("{\"function\":\"minecraft:enchant_randomly\"}");
+                        } else if ("enchant with levels".equals(value)) {
+                            result.add("{\"function\":\"minecraft:enchant_with_levels\"}");
+                        }
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     private static Component notesComponent(List<StructureIndexCache.LootTextEntry> notes, String fallbackText) {
@@ -959,13 +1010,13 @@ public final class StructureRecipe {
     }
 
     private List<ItemStack> buildLookupInputs() {
-        LinkedHashMap<Item, ItemStack> lookup = new LinkedHashMap<>();
+        LinkedHashMap<String, ItemStack> lookup = new LinkedHashMap<>();
         for (ContentBlock block : contentBlocks) {
             for (SlotDisplay slot : block.slots()) {
                 if (slot.kind() != SlotKind.ITEM || slot.itemStack() == null || slot.itemStack().isEmpty()) {
                     continue;
                 }
-                lookup.putIfAbsent(slot.itemStack().getItem(), slot.itemStack().copy());
+                lookup.putIfAbsent(ForgeRegistries.ITEMS.getKey(slot.itemStack().getItem()) + "\u0000" + slot.itemStack().getTag(), slot.itemStack().copy());
             }
         }
         return List.copyOf(lookup.values());
@@ -1340,7 +1391,7 @@ public final class StructureRecipe {
     private record GenerationBiomeDisplay(StructureBiomeIcon icon, List<String> sourceSelectors) {
     }
 
-    private record StoredItemsGroup(String blockId, List<String> itemIds) {
+    private record StoredItemsGroup(String blockId, List<StructureIndexCache.ItemStackEntry> items) {
     }
 
     private record BlockLootGroup(String blockId, List<StructureIndexCache.LootTableDetail> lootTables) {

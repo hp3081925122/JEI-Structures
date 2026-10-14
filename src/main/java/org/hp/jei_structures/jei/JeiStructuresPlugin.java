@@ -73,12 +73,14 @@ public final class JeiStructuresPlugin implements IModPlugin {
     @Override
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
         runtime = jeiRuntime;
+
         JeiStructures.LOGGER.debug("JEI runtime became available for current structure opener");
     }
 
     @Override
     public void onRuntimeUnavailable() {
         runtime = null;
+
         JeiStructures.LOGGER.debug("JEI runtime became unavailable for current structure opener");
     }
 
@@ -129,11 +131,14 @@ public final class JeiStructuresPlugin implements IModPlugin {
     }
 
     private static List<StructureRecipe> buildRecipes(StructureIndexCache cache) {
+
         List<StructureRecipe> recipes = new ArrayList<>();
         for (StructureIndexCache.StructureEntry entry : cache.structures) {
             recipes.add(new StructureRecipe(entry));
         }
-        return List.copyOf(recipes);
+        List<StructureRecipe> result = List.copyOf(recipes);
+
+        return result;
     }
 
     private static List<StructureBiomeIcon> buildBiomeIngredients(StructureIndexCache cache) {
@@ -197,11 +202,14 @@ public final class JeiStructuresPlugin implements IModPlugin {
         }
 
         private List<StructureRecipe> getMatchedRecipes(ITypedIngredient<?> ingredient) {
+
             CachedLookup lookup = getLookup();
-            return ingredient.getItemStack()
+            List<StructureRecipe> result = ingredient.getItemStack()
                     .map(ItemStack::getItem)
                     .map(lookup.recipesByItem::get)
                     .orElse(null);
+
+            return result;
         }
 
         private CachedLookup getLookup() {
@@ -220,6 +228,7 @@ public final class JeiStructuresPlugin implements IModPlugin {
         }
 
         private static Map<Item, List<StructureRecipe>> indexRecipes(List<StructureRecipe> recipes) {
+
             Map<Item, Set<StructureRecipe>> deduplicatedIndex = new IdentityHashMap<>();
             for (StructureRecipe recipe : recipes) {
                 addStacks(deduplicatedIndex, recipe.getLookupInputs(), recipe);
@@ -229,7 +238,9 @@ public final class JeiStructuresPlugin implements IModPlugin {
             for (Map.Entry<Item, Set<StructureRecipe>> entry : deduplicatedIndex.entrySet()) {
                 index.put(entry.getKey(), List.copyOf(entry.getValue()));
             }
-            return Collections.unmodifiableMap(index);
+            Map<Item, List<StructureRecipe>> result = Collections.unmodifiableMap(index);
+
+            return result;
         }
 
         private static void addStacks(Map<Item, Set<StructureRecipe>> index, List<ItemStack> stacks, StructureRecipe recipe) {

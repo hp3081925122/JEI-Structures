@@ -980,7 +980,7 @@ public final class DebugStructureCaptureManager {
                 if (storedItems.isEmpty() && lootItems.isEmpty() && detail == null) {
                     continue;
                 }
-                currentAttempt.aggregate.recordLoot(blockId.toString(), storedItems, lootItems, detail);
+                currentAttempt.aggregate.recordLoot(blockId.toString(), storedItems, StoredItemNbtReader.readStoredItemStacks(nbt), lootItems, detail);
             }
             currentAttempt.successful = true;
         }
@@ -1368,13 +1368,14 @@ public final class DebugStructureCaptureManager {
             this.structureType = structureType != null ? structureType : "";
         }
 
-        private void recordLoot(String blockId, Set<String> storedItems, Set<String> lootItems, StructureIndexCache.LootTableDetail detail) {
+        private void recordLoot(String blockId, Set<String> storedItems, List<StructureIndexCache.ItemStackEntry> storedStacks, Set<String> lootItems, StructureIndexCache.LootTableDetail detail) {
             if (blockId == null || blockId.isBlank()) {
                 return;
             }
             LootBindingAggregate aggregate = lootBindings.computeIfAbsent(blockId, LootBindingAggregate::new);
             if (storedItems != null) {
                 aggregate.storedItems.addAll(storedItems);
+                StructureIndexCache.mergeItemStacks(aggregate.storedItemStacks, storedStacks);
             }
             if (lootItems != null) {
                 aggregate.itemIds.addAll(lootItems);
@@ -1420,6 +1421,7 @@ public final class DebugStructureCaptureManager {
     private static final class LootBindingAggregate {
         private final String blockId;
         private final LinkedHashSet<String> storedItems = new LinkedHashSet<>();
+        private final List<StructureIndexCache.ItemStackEntry> storedItemStacks = new ArrayList<>();
         private final LinkedHashSet<String> itemIds = new LinkedHashSet<>();
         private final LinkedHashMap<String, StructureIndexCache.LootTableDetail> lootTables = new LinkedHashMap<>();
 
@@ -1452,6 +1454,12 @@ public final class DebugStructureCaptureManager {
                 for (StructureIndexCache.LootItemEntry entry : detail.entries) {
                     JsonObject entryJson = new JsonObject();
                     entryJson.addProperty("item_id", entry.itemId);
+                    entryJson.addProperty("tag_snbt", entry.tagSnbt);
+                    JsonArray itemFunctions = new JsonArray();
+                    if (entry.itemFunctions != null) {
+                        entry.itemFunctions.forEach(itemFunctions::add);
+                    }
+                    entryJson.add("item_functions", itemFunctions);
                     entryJson.addProperty("weight", entry.weight);
                     entryJson.addProperty("quality", entry.quality);
                     entryJson.addProperty("rolls_text", entry.rollsText);
@@ -1470,6 +1478,14 @@ public final class DebugStructureCaptureManager {
             JsonArray storedItemsArray = new JsonArray();
             storedItems.stream().sorted(String.CASE_INSENSITIVE_ORDER).forEach(storedItemsArray::add);
             json.add("stored_items", storedItemsArray);
+            JsonArray storedStacksArray = new JsonArray();
+            for (StructureIndexCache.ItemStackEntry stack : storedItemStacks) {
+                JsonObject stackJson = new JsonObject();
+                stackJson.addProperty("item_id", stack.itemId);
+                stackJson.addProperty("tag_snbt", stack.tagSnbt);
+                storedStacksArray.add(stackJson);
+            }
+            json.add("stored_item_stacks", storedStacksArray);
             JsonArray itemsArray = new JsonArray();
             itemIds.stream().sorted(String.CASE_INSENSITIVE_ORDER).forEach(itemsArray::add);
             json.add("items", itemsArray);

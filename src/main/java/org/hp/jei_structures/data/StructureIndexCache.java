@@ -14,7 +14,7 @@ public final class StructureIndexCache implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    public static final int CURRENT_VERSION = 12;
+    public static final int CURRENT_VERSION = 13;
     public static final Gson GSON = new GsonBuilder()
             .disableHtmlEscaping()
             .setPrettyPrinting()
@@ -29,6 +29,9 @@ public final class StructureIndexCache implements Serializable {
         if (lootTableDetails == null) {
             lootTableDetails = new LinkedHashMap<>();
         }
+        for (LootTableDetail detail : lootTableDetails.values()) {
+            removeDuplicateLootEntries(detail);
+        }
         for (StructureEntry structure : structures) {
             if (structure == null) {
                 continue;
@@ -41,11 +44,15 @@ public final class StructureIndexCache implements Serializable {
     }
 
     public boolean prepareRuntimeLootTables() {
-        if (version != CURRENT_VERSION) {
+        if (version != 12 && version != CURRENT_VERSION) {
             return false;
         }
+        version = CURRENT_VERSION;
         if (lootTableDetails == null) {
             lootTableDetails = new LinkedHashMap<>();
+        }
+        for (LootTableDetail detail : lootTableDetails.values()) {
+            removeDuplicateLootEntries(detail);
         }
         for (StructureEntry structure : structures) {
             if (structure == null) {
@@ -86,6 +93,7 @@ public final class StructureIndexCache implements Serializable {
                     if (detail == null || detail.lootTableId == null || detail.lootTableId.isBlank()) {
                         continue;
                     }
+                    removeDuplicateLootEntries(detail);
                     LootTableDetail existing = lootTableDetails.get(detail.lootTableId);
                     if (existing == null || lootTableDetailScore(detail) > lootTableDetailScore(existing)) {
                         lootTableDetails.put(detail.lootTableId, detail);
@@ -134,6 +142,21 @@ public final class StructureIndexCache implements Serializable {
             }
         }
         return score;
+    }
+
+    public static void removeDuplicateLootEntries(LootTableDetail detail) {
+        if (detail == null || detail.entries == null || detail.entries.size() < 2) {
+            return;
+        }
+        LinkedHashMap<String, LootItemEntry> unique = new LinkedHashMap<>();
+        for (LootItemEntry entry : detail.entries) {
+            if (entry != null) {
+                unique.putIfAbsent(GSON.toJson(entry), entry);
+            }
+        }
+        if (unique.size() != detail.entries.size()) {
+            detail.entries = new ArrayList<>(unique.values());
+        }
     }
 
     public static final class StructureEntry implements Serializable {
@@ -191,8 +214,43 @@ public final class StructureIndexCache implements Serializable {
         public String lootTableId = "";
         public List<String> lootTableIds = new ArrayList<>();
         public List<String> storedItemIds = new ArrayList<>();
+        public List<ItemStackEntry> storedItemStacks = new ArrayList<>();
         public List<String> itemIds = new ArrayList<>();
         public List<LootTableDetail> lootTables = new ArrayList<>();
+    }
+
+    public static final class ItemStackEntry implements Serializable {
+
+        private static final long serialVersionUID = 1L;
+        public String itemId = "";
+        public String tagSnbt = "";
+    }
+
+    public static List<ItemStackEntry> copyItemStacks(List<ItemStackEntry> entries) {
+        List<ItemStackEntry> result = new ArrayList<>();
+        if (entries != null) {
+            for (ItemStackEntry entry : entries) {
+                if (entry != null && entry.itemId != null && !entry.itemId.isBlank()) {
+                    ItemStackEntry copy = new ItemStackEntry();
+                    copy.itemId = entry.itemId;
+                    copy.tagSnbt = entry.tagSnbt != null ? entry.tagSnbt : "";
+                    result.add(copy);
+                }
+            }
+        }
+        return result;
+    }
+
+    public static void mergeItemStacks(List<ItemStackEntry> target, List<ItemStackEntry> incoming) {
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (ItemStackEntry entry : target) {
+            keys.add(entry.itemId + "\u0000" + entry.tagSnbt);
+        }
+        for (ItemStackEntry entry : copyItemStacks(incoming)) {
+            if (keys.add(entry.itemId + "\u0000" + entry.tagSnbt)) {
+                target.add(entry);
+            }
+        }
     }
 
     public static final class SpecialInfoEntry implements Serializable {
@@ -214,6 +272,8 @@ public final class StructureIndexCache implements Serializable {
 
         private static final long serialVersionUID = 1L;
         public String itemId = "";
+        public String tagSnbt = "";
+        public List<String> itemFunctions = new ArrayList<>();
         public int weight;
         public int quality;
         public String rollsText = "";

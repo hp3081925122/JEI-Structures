@@ -10,6 +10,7 @@ public final class StructureLootBinding {
     public List<String> lootTables = new ArrayList<>();
     public List<String> items = new ArrayList<>();
     public List<String> storedItems = new ArrayList<>();
+    public List<StructureIndexCache.ItemStackEntry> storedItemStacks = new ArrayList<>();
     public List<StructureIndexCache.LootTableDetail> lootTableDetails = new ArrayList<>();
     public boolean captured;
 
@@ -21,6 +22,7 @@ public final class StructureLootBinding {
         copy.items = items != null ? new ArrayList<>(items) : new ArrayList<>();
         copy.storedItems = storedItems != null ? new ArrayList<>(storedItems) : new ArrayList<>();
         copy.captured = captured;
+        copy.storedItemStacks = StructureIndexCache.copyItemStacks(storedItemStacks);
         if (lootTableDetails != null) {
             for (StructureIndexCache.LootTableDetail detail : lootTableDetails) {
                 copy.lootTableDetails.add(copyLootTableDetail(detail));
@@ -42,6 +44,8 @@ public final class StructureLootBinding {
                 }
                 StructureIndexCache.LootItemEntry entry = new StructureIndexCache.LootItemEntry();
                 entry.itemId = sourceEntry.itemId != null ? sourceEntry.itemId : "";
+                entry.tagSnbt = sourceEntry.tagSnbt != null ? sourceEntry.tagSnbt : "";
+                entry.itemFunctions = sourceEntry.itemFunctions != null ? new ArrayList<>(sourceEntry.itemFunctions) : new ArrayList<>();
                 entry.weight = sourceEntry.weight;
                 entry.quality = sourceEntry.quality;
                 entry.rollsText = sourceEntry.rollsText != null ? sourceEntry.rollsText : "";

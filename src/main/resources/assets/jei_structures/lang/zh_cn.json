@@ -161,5 +161,8 @@
   "jei_structures.terrain_adjustment.none": "不额外改变地形",
   "jei_structures.terrain_adjustment.bury": "会埋在地形里",
   "jei_structures.terrain_adjustment.beard_thin": "轻微融入周围地形",
-  "jei_structures.terrain_adjustment.beard_box": "大范围融入周围地形"
+  "jei_structures.terrain_adjustment.beard_box": "大范围融入周围地形",
+  "jei_structures.tooltip.random_enchantment": "随机附魔：具体附魔与等级在生成时确定",
+  "jei_structures.tooltip.missing_variant_data": "旧缓存没有保存该物品的附魔或药水数据，请重新捕获并导出",
+  "jei_structures.tooltip.conditional_item_data": "物品附加数据是否生效取决于战利品条件"
 }
