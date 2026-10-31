@@ -7,6 +7,10 @@ import dev.emi.emi.api.widget.Widget;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.network.chat.Component;
+import mezz.jei.common.Internal;
+import mezz.jei.common.gui.elements.ScalableDrawable;
+import mezz.jei.common.gui.textures.Textures;
+import mezz.jei.common.util.ImmutableRect2i;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -14,7 +18,8 @@ import java.util.List;
 
 public final class EmiStructureScrollWidget extends Widget implements EmiStructureScrollableWidget {
 
-    private static final int SCROLLBAR_WIDTH = 12;
+    private static final int SCROLLBAR_WIDTH = 14;
+    private static final int MIN_SCROLL_MARKER_HEIGHT = 14;
     private static final int SLOT_SIZE = 18;
 
     private final StructureRecipe recipe;
@@ -24,7 +29,11 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
     private final int y;
     private final int width;
     private final int height;
+    private final int contentTop;
+    private final int viewportHeight;
     private final int contentHeight;
+    private final ScalableDrawable scrollbarMarker;
+    private final ScalableDrawable scrollbarBackground;
     private int scrollOffset;
     private boolean draggingScrollbar;
     private int scrollbarGrabOffset;
@@ -37,7 +46,12 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
         this.y = y;
         this.width = width;
         this.height = height;
-        this.contentHeight = Math.max(StructureRecipeCategory.getContentHeight(), recipe.getTotalContentHeight());
+        this.contentTop = StructureRecipeCategory.getContentY(recipe);
+        this.viewportHeight = height - contentTop;
+        this.contentHeight = Math.max(viewportHeight, recipe.getTotalContentHeight());
+        Textures textures = Internal.getTextures();
+        this.scrollbarMarker = textures.getScrollbarMarker();
+        this.scrollbarBackground = textures.getScrollbarBackground();
     }
 
     @Override
@@ -48,9 +62,9 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
         int contentX = x + StructureRecipeCategory.getContentX();
-        int contentY = y + StructureRecipeCategory.getContentY();
+        int contentY = y + contentTop;
         int contentWidth = StructureRecipeCategory.getContentWidth();
-        int contentViewportHeight = StructureRecipeCategory.getContentHeight();
+        int contentViewportHeight = viewportHeight;
 
         StructureRecipeCategory.drawPanel(guiGraphics, contentX, contentY, contentWidth, contentViewportHeight);
         StructureRecipeCategory.drawFixedHeader(recipe, guiGraphics, contentX, contentY);
@@ -79,7 +93,7 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
         StructureRecipe.SlotDisplay display = slots.get(index);
         StructureRecipeCategory.SlotPlacement placement = placements.get(index);
         int slotX = x + StructureRecipeCategory.getContentX() + placement.x();
-        int slotY = y + StructureRecipeCategory.getContentY() + placement.y() - scrollOffset;
+        int slotY = y + contentTop + placement.y() - scrollOffset;
         if (display.kind() == StructureRecipe.SlotKind.ITEM && display.itemStack() != null && !display.itemStack().isEmpty()) {
             return createItemSlot(display, slotX, slotY).getTooltip(mouseX, mouseY);
         }
@@ -106,7 +120,7 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
         }
         StructureRecipeCategory.SlotPlacement placement = placements.get(index);
         int slotX = x + StructureRecipeCategory.getContentX() + placement.x();
-        int slotY = y + StructureRecipeCategory.getContentY() + placement.y() - scrollOffset;
+        int slotY = y + contentTop + placement.y() - scrollOffset;
         return createItemSlot(display, slotX, slotY).mouseClicked(mouseX, mouseY, button);
     }
 
@@ -143,7 +157,7 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
             StructureRecipe.SlotDisplay display = slots.get(index);
             StructureRecipeCategory.SlotPlacement placement = placements.get(index);
             int slotX = x + StructureRecipeCategory.getContentX() + placement.x();
-            int slotY = y + StructureRecipeCategory.getContentY() + placement.y() - scrollOffset;
+            int slotY = y + contentTop + placement.y() - scrollOffset;
             if (!isSlotVisible(slotY)) {
                 continue;
             }
@@ -180,7 +194,7 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
         for (int index = 0; index < slotCount; index++) {
             StructureRecipeCategory.SlotPlacement placement = placements.get(index);
             int slotX = x + StructureRecipeCategory.getContentX() + placement.x();
-            int slotY = y + StructureRecipeCategory.getContentY() + placement.y() - scrollOffset;
+            int slotY = y + contentTop + placement.y() - scrollOffset;
             if (isSlotVisible(slotY) && mouseX >= slotX && mouseX < slotX + SLOT_SIZE && mouseY >= slotY && mouseY < slotY + SLOT_SIZE) {
                 return index;
             }
@@ -189,37 +203,31 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
     }
 
     private boolean isSlotVisible(int slotY) {
-        int contentY = y + StructureRecipeCategory.getContentY();
-        return slotY + SLOT_SIZE > contentY && slotY < contentY + StructureRecipeCategory.getContentHeight();
+        int contentY = y + contentTop;
+        return slotY + SLOT_SIZE > contentY && slotY < contentY + viewportHeight;
     }
 
     private boolean isOverContent(int mouseX, int mouseY) {
         int contentX = x + StructureRecipeCategory.getContentX();
-        int contentY = y + StructureRecipeCategory.getContentY();
+        int contentY = y + contentTop;
         return mouseX >= contentX
                 && mouseX < contentX + StructureRecipeCategory.getContentWidth()
                 && mouseY >= contentY
-                && mouseY < contentY + StructureRecipeCategory.getContentHeight();
+                && mouseY < contentY + viewportHeight;
     }
 
     private void drawScrollbar(GuiGraphics guiGraphics) {
-        int barX = scrollbarX();
-        int contentY = y + StructureRecipeCategory.getContentY();
-        int contentViewportHeight = StructureRecipeCategory.getContentHeight();
-        guiGraphics.fill(barX, contentY + 4, barX + 8, contentY + contentViewportHeight - 4, 0xFFB5B5B5);
-        if (getHiddenAmount() <= 0) {
-            guiGraphics.fill(barX + 1, contentY + 5, barX + 7, contentY + contentViewportHeight - 5, 0xFFE0E0E0);
-            return;
-        }
-        guiGraphics.fill(barX + 1, scrollbarThumbY(), barX + 7, scrollbarThumbY() + scrollbarThumbHeight(), 0xFF8A8A8A);
+        int top = y + contentTop;
+        scrollbarBackground.draw(guiGraphics, new ImmutableRect2i(scrollbarX(), top, SCROLLBAR_WIDTH, viewportHeight));
+        scrollbarMarker.draw(guiGraphics, new ImmutableRect2i(scrollbarX() + 1, scrollbarThumbY(), SCROLLBAR_WIDTH - 2, scrollbarThumbHeight()));
     }
 
     private boolean isOverScrollbar(int mouseX, int mouseY) {
-        int contentY = y + StructureRecipeCategory.getContentY();
+        int top = y + contentTop;
         return mouseX >= scrollbarX()
-                && mouseX < scrollbarX() + 8
-                && mouseY >= contentY + 4
-                && mouseY < contentY + StructureRecipeCategory.getContentHeight() - 4;
+                && mouseX < scrollbarX() + SCROLLBAR_WIDTH
+                && mouseY >= top
+                && mouseY < top + viewportHeight;
     }
 
     private int scrollbarX() {
@@ -227,27 +235,27 @@ public final class EmiStructureScrollWidget extends Widget implements EmiStructu
     }
 
     private int scrollbarTrackHeight() {
-        return StructureRecipeCategory.getContentHeight() - 10;
+        return viewportHeight - 2;
     }
 
     private int scrollbarThumbHeight() {
-        return Math.max(16, StructureRecipeCategory.getContentHeight() * scrollbarTrackHeight() / contentHeight);
+        return Math.min(scrollbarTrackHeight(), Math.max(MIN_SCROLL_MARKER_HEIGHT, viewportHeight * scrollbarTrackHeight() / contentHeight));
     }
 
     private int scrollbarThumbY() {
-        int trackY = y + StructureRecipeCategory.getContentY() + 5;
+        int trackY = y + contentTop + 1;
         return trackY + scrollOffset * (scrollbarTrackHeight() - scrollbarThumbHeight()) / Math.max(1, getHiddenAmount());
     }
 
     private void updateScrollFromMouse(int mouseY) {
-        int trackY = y + StructureRecipeCategory.getContentY() + 5;
+        int trackY = y + contentTop + 1;
         int availableTrack = Math.max(1, scrollbarTrackHeight() - scrollbarThumbHeight());
         int thumbTop = clamp(mouseY - scrollbarGrabOffset, trackY, trackY + availableTrack);
         scrollOffset = clamp((thumbTop - trackY) * getHiddenAmount() / availableTrack, 0, getHiddenAmount());
     }
 
     private int getHiddenAmount() {
-        return Math.max(0, contentHeight - StructureRecipeCategory.getContentHeight());
+        return Math.max(0, contentHeight - viewportHeight);
     }
 
     private static List<StructureRecipe.SlotDisplay> collectSlots(StructureRecipe recipe) {

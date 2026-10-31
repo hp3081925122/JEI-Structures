@@ -32,14 +32,8 @@ side = "BOTH"
 
 [[dependencies."${mod_id}"]]
 modId = "jei"
-mandatory = false
+type = "required"
 versionRange = "${jei_version_range}"
 ordering = "AFTER"
 side = "CLIENT"
 
-[[dependencies."${mod_id}"]]
-modId = "emi"
-type = "optional"
-versionRange = "${emi_version_range}"
-ordering = "AFTER"
-side = "CLIENT"

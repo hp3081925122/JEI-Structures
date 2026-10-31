@@ -14,7 +14,8 @@ import java.util.List;
 public final class EmiStructureRecipe implements EmiRecipe {
 
     private static final int DISPLAY_WIDTH = 204;
-    private static final int DISPLAY_HEIGHT = 202;
+    private static final int MAX_DISPLAY_HEIGHT = 202;
+    private static final int MIN_DISPLAY_HEIGHT = 80;
 
     private final StructureRecipe recipe;
     private final List<EmiIngredient> inputs;
@@ -68,12 +69,12 @@ public final class EmiStructureRecipe implements EmiRecipe {
 
     @Override
     public int getDisplayHeight() {
-        return DISPLAY_HEIGHT;
+        return Math.max(MIN_DISPLAY_HEIGHT, Math.min(MAX_DISPLAY_HEIGHT, EmiStructuresLayout.maxRecipeHeight()));
     }
 
     @Override
     public void addWidgets(WidgetHolder widgets) {
-        widgets.add(new EmiStructureScrollWidget(this, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT));
+        widgets.add(new EmiStructureScrollWidget(this, 0, 0, DISPLAY_WIDTH, widgets.getHeight()));
     }
 
     @Override
