@@ -63,14 +63,8 @@ ordering = "NONE"
 side = "BOTH"
 [[dependencies."${mod_id}"]]
 modId = "jei"
-mandatory = false
+mandatory = true
 versionRange = "[15.20.0,16)"
-ordering = "AFTER"
-side = "CLIENT"
-[[dependencies."${mod_id}"]]
-modId = "emi"
-mandatory = false
-versionRange = "[1.1.20,)"
 ordering = "AFTER"
 side = "CLIENT"
 [[dependencies."${mod_id}"]]

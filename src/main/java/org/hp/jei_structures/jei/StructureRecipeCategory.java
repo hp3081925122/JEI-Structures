@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.hp.jei_structures.JeiStructures;
@@ -26,12 +27,14 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     public static final RecipeType<StructureRecipe> TYPE = RecipeType.create(JeiStructures.MODID, "structure_index", StructureRecipe.class);
 
-    private static final int WIDTH = 200;
-    private static final int HEIGHT = 200;
+    private static final int WIDTH = 204;
+    private static final int MAX_HEIGHT = 202;
+    private static final int MIN_HEIGHT = 80;
     private static final int CONTENT_X = 6;
     private static final int CONTENT_Y = 14;
     private static final int CONTENT_WIDTH = 198;
-    private static final int CONTENT_HEIGHT = 188;
+    private static final int TITLE_MAX_LINES = 2;
+    private static final int TITLE_LINE_HEIGHT = 10;
     private static final int CONTENT_PADDING_Y = 5;
     private static final int TITLE_CENTER_Y = 6;
     private static final int FIXED_TITLE_Y = 12;
@@ -42,6 +45,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     private static final int HEADER_DIVIDER_INSET = 12;
     private static final int HEADER_CONTENT_GAP = 6;
     private static final int CARD_CONTENT_INSET_X = 11;
+    private static final int TITLE_WRAP_WIDTH = CONTENT_WIDTH - SCROLLBAR_EXTRA_WIDTH - 4;
 
     private final IDrawable icon;
 
@@ -75,7 +79,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     @Override
     public int getHeight() {
-        return HEIGHT;
+        return JeiStructuresLayout.fitHeight(MAX_HEIGHT, MIN_HEIGHT);
     }
 
     @Override
@@ -113,15 +117,15 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     @Override
     public void draw(StructureRecipe recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
-        drawPanel(guiGraphics, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT);
-        drawFixedHeader(recipe, guiGraphics, CONTENT_X, CONTENT_Y);
+        drawFixedHeader(recipe, guiGraphics, CONTENT_X, getContentY(recipe));
     }
 
     @Override
     public void createRecipeExtras(mezz.jei.api.gui.widgets.IRecipeExtrasBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
 
         List<IRecipeSlotDrawable> contentSlots = builder.getRecipeSlots().getSlots();
-        StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT, contentSlots);
+        int contentY = getContentY(recipe);
+        StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, contentY, CONTENT_WIDTH, getHeight() - contentY, contentSlots);
         builder.addSlottedWidget(widget, contentSlots);
         builder.addInputHandler(widget);
 
@@ -211,16 +215,20 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         return CONTENT_X;
     }
 
-    static int getContentY() {
-        return CONTENT_Y;
+    static List<FormattedCharSequence> getTitleLines(StructureRecipe recipe) {
+        List<FormattedCharSequence> lines = Minecraft.getInstance().font.split(recipe.getDisplayName(), TITLE_WRAP_WIDTH);
+        if (lines.isEmpty()) {
+            return List.of(FormattedCharSequence.EMPTY);
+        }
+        return lines.size() > TITLE_MAX_LINES ? lines.subList(0, TITLE_MAX_LINES) : lines;
+    }
+
+    static int getContentY(StructureRecipe recipe) {
+        return CONTENT_Y + (getTitleLines(recipe).size() - 1) * TITLE_LINE_HEIGHT;
     }
 
     static int getContentWidth() {
         return CONTENT_WIDTH;
-    }
-
-    static int getContentHeight() {
-        return CONTENT_HEIGHT;
     }
 
     private static int getContentWidthWithoutScrollbar() {
@@ -285,15 +293,15 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         guiGraphics.fill(x, y + height - 1, x + width, y + height, 0xFFD5D5D5);
     }
 
-    private static void drawCenteredString(GuiGraphics guiGraphics, Font font, Component text, int centerX, int y, int color) {
-        int width = font.width(text);
-        guiGraphics.drawString(font, text, centerX - width / 2, y + TITLE_CENTER_Y - font.lineHeight / 2, resolveTextColor(text, color), false);
-    }
-
     static void drawFixedHeader(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
         Font font = Minecraft.getInstance().font;
-        int titleY = y - FIXED_TITLE_Y;
-        drawCenteredString(guiGraphics, font, recipe.getDisplayName(), x + getContentRightEdge() / 2, titleY, 0xFF2A2A2A);
+        List<FormattedCharSequence> titleLines = getTitleLines(recipe);
+        int centerX = x + getContentRightEdge() / 2;
+        int titleY = y - FIXED_TITLE_Y - (titleLines.size() - 1) * TITLE_LINE_HEIGHT + TITLE_CENTER_Y - font.lineHeight / 2;
+        for (int index = 0; index < titleLines.size(); index++) {
+            FormattedCharSequence line = titleLines.get(index);
+            guiGraphics.drawString(font, line, centerX - font.width(line) / 2, titleY + index * TITLE_LINE_HEIGHT, 0xFF2A2A2A, false);
+        }
         int dividerY = y - 1;
         guiGraphics.fill(
                 x + getCardContentInsetX() + HEADER_DIVIDER_INSET,
