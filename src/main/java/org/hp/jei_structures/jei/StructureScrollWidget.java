@@ -88,6 +88,7 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
 
     @Override
     public void drawWidget(GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
+        StructureRecipeCategory.drawPanel(guiGraphics, 0, 0, width, height);
         scrollbarBackground.draw(
                 guiGraphics,
                 scrollbarArea.left(),

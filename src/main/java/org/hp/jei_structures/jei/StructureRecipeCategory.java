@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -28,11 +29,14 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     public static final RecipeType<StructureRecipe> TYPE = RecipeType.create(JeiStructures.MODID, "structure_index", StructureRecipe.class);
 
     private static final int WIDTH = 188;
-    private static final int HEIGHT = 170;
+    private static final int MAX_HEIGHT = 170;
+    private static final int MIN_HEIGHT = 80;
+    private static final int TITLE_MAX_LINES = 2;
+    private static final int TITLE_LINE_HEIGHT = 10;
+    private static final int TITLE_WRAP_WIDTH = WIDTH - 8;
     private static final int CONTENT_X = 4;
     private static final int CONTENT_Y = 16;
     private static final int CONTENT_WIDTH = 180;
-    private static final int CONTENT_HEIGHT = 150;
     private static final int CONTENT_PADDING_Y = 4;
     private static final int SLOT_SPACING = 18;
     private static final int SCROLLBAR_EXTRA_WIDTH = 16;
@@ -75,7 +79,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     @Override
     public int getHeight() {
-        return HEIGHT;
+        return JeiStructuresLayout.fitHeight(MAX_HEIGHT, MIN_HEIGHT);
     }
 
     @Override
@@ -112,7 +116,8 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
         List<mezz.jei.api.gui.ingredient.IRecipeSlotDrawable> slots = builder.getRecipeSlots().getSlots();
-        StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT, slots);
+        int contentY = getContentY(recipe);
+        StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, contentY, CONTENT_WIDTH, getHeight() - contentY, slots);
         builder.addSlottedWidget(widget, slots);
         builder.addInputHandler(widget);
     }
@@ -120,8 +125,10 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     @Override
     public void draw(StructureRecipe recipe, IRecipeSlotsView recipeSlotsView, GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
         Font font = Minecraft.getInstance().font;
-        guiGraphics.text(font, recipe.getDisplayName(), CONTENT_X, 4, 0xFF2B2B2B, false);
-        drawPanel(guiGraphics, CONTENT_X, CONTENT_Y, CONTENT_WIDTH, CONTENT_HEIGHT);
+        List<FormattedCharSequence> titleLines = getTitleLines(recipe);
+        for (int index = 0; index < titleLines.size(); index++) {
+            guiGraphics.text(font, titleLines.get(index), CONTENT_X, 4 + index * TITLE_LINE_HEIGHT, 0xFF2B2B2B, false);
+        }
     }
 
     static void drawScrollableContents(StructureRecipe recipe, GuiGraphicsExtractor guiGraphics, int x, int y) {
@@ -189,16 +196,20 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         return CONTENT_X;
     }
 
-    static int getContentY() {
-        return CONTENT_Y;
+    static List<FormattedCharSequence> getTitleLines(StructureRecipe recipe) {
+        List<FormattedCharSequence> lines = Minecraft.getInstance().font.split(recipe.getDisplayName(), TITLE_WRAP_WIDTH);
+        if (lines.isEmpty()) {
+            return List.of(FormattedCharSequence.EMPTY);
+        }
+        return lines.size() > TITLE_MAX_LINES ? lines.subList(0, TITLE_MAX_LINES) : lines;
+    }
+
+    static int getContentY(StructureRecipe recipe) {
+        return CONTENT_Y + (getTitleLines(recipe).size() - 1) * TITLE_LINE_HEIGHT;
     }
 
     static int getContentWidth() {
         return CONTENT_WIDTH;
-    }
-
-    static int getContentHeight() {
-        return CONTENT_HEIGHT;
     }
 
     static void drawPanel(GuiGraphicsExtractor guiGraphics, int x, int y, int width, int height) {
