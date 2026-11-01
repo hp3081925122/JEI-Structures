@@ -9,6 +9,7 @@
   "jei_structures.command.export.success": "JEI Structures index exported to: %s",
   "jei_structures.command.export.failure": "JEI Structures export failed: %s",
   "jei_structures.command.debug_capture.player_only": "This debug capture command can only be used by an in-game player",
+  "jei_structures.command.debug_capture.save_warning": "Warning: structure capture generates, teleports through and modifies a large number of chunks. Run it in a separate world to avoid damaging your playthrough save. Enter the command again to continue.",
   "jei_structures.command.debug_capture.start": "Started debug capture for %s structures at speed x%s. Output directory: %s",
   "jei_structures.command.debug_capture.busy": "A debug capture task is already running. Check the status or stop it first",
   "jei_structures.command.debug_capture.empty": "No capturable structures were found. Run /jei_structures export first",

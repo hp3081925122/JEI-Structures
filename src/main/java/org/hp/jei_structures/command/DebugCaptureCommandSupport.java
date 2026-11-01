@@ -1,11 +1,13 @@
 package org.hp.jei_structures.command;
 
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import org.hp.jei_structures.JeiStructures;
@@ -13,8 +15,13 @@ import org.hp.jei_structures.data.StructureIndexCache;
 import org.hp.jei_structures.data.StructureIndexCacheLoader;
 import org.hp.jei_structures.debug.DebugStructureCaptureTypes;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.WeakHashMap;
 
 final class DebugCaptureCommandSupport {
 
@@ -30,6 +37,8 @@ final class DebugCaptureCommandSupport {
     static final SuggestionProvider<CommandSourceStack> MOD_ID_SUGGESTIONS = (context, builder) ->
             SharedSuggestionProvider.suggest(collectSuggestedModIds(context.getSource()), builder);
 
+    private static final Map<MinecraftServer, Set<UUID>> WARNED_PLAYERS = Collections.synchronizedMap(new WeakHashMap<>());
+
     static final String ARG_EXCLUDE_MOD_ID = "exclude_mod_id";
     static final String ARG_EXCLUDE_DIMENSION_ID = "exclude_dimension_id";
 
@@ -38,6 +47,11 @@ final class DebugCaptureCommandSupport {
 
     static ServerPlayer requirePlayer(CommandSourceStack source) {
         if (source.getEntity() instanceof ServerPlayer player) {
+            Set<UUID> warnedPlayers = WARNED_PLAYERS.computeIfAbsent(source.getServer(), ignored -> new HashSet<>());
+            if (warnedPlayers.add(player.getUUID())) {
+                source.sendFailure(Component.translatable("jei_structures.command.debug_capture.save_warning").withStyle(ChatFormatting.RED));
+                return null;
+            }
             return player;
         }
         source.sendFailure(Component.translatable("jei_structures.command.debug_capture.player_only"));

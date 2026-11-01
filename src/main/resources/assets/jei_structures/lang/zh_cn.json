@@ -9,6 +9,7 @@
   "jei_structures.command.export.success": "JEI Structures 结构索引已导出到：%s",
   "jei_structures.command.export.failure": "JEI Structures 导出失败：%s",
   "jei_structures.command.debug_capture.player_only": "该调试采集指令只能由游戏内玩家执行",
+  "jei_structures.command.debug_capture.save_warning": "警告：结构采集会生成、传送并改动大量区块，请在一个单独的存档中进行，以免导致游玩存档损坏。确认要继续请再次输入该指令。",
   "jei_structures.command.debug_capture.start": "已开始调试采集，共%s个结构，倍速 x%s，输出目录：%s",
   "jei_structures.command.debug_capture.busy": "已有调试采集任务正在运行，请先查看状态或停止当前任务",
   "jei_structures.command.debug_capture.empty": "未找到可采集的结构，请先执行 /jei_structures export",

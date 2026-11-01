@@ -5,9 +5,16 @@
   "compatibilityLevel": "JAVA_25",
   "refmap": "jei_structures.refmap.json",
   "mixins": [
+    "ChunkGeneratorFeatureSkipMixin",
+    "ChunkGeneratorLocateCancelMixin",
+    "ChunkMapCaptureSaveMixin",
     "ChunkMapCaptureSyncMixin",
+    "ChunkStatusTasksSpawnSkipMixin",
+    "ServerChunkCacheAccessor",
+    "ServerChunkCacheLocateMixin",
     "ServerGamePacketListenerCaptureSyncMixin",
-    "StructureCheckConcurrencyMixin"
+    "StructureCheckConcurrencyMixin",
+    "ThreadedLevelLightEngineCaptureMixin"
   ],
   "client": [],
   "injectors": {

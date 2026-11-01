@@ -6,6 +6,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import org.hp.jei_structures.config.JeiStructuresConfig;
+import org.hp.jei_structures.debug.DebugCaptureChunkTickets;
 import org.hp.jei_structures.network.JeiStructuresNetwork;
 import org.slf4j.Logger;
 
@@ -18,5 +19,6 @@ public final class JeiStructures {
     public JeiStructures(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, JeiStructuresConfig.COMMON_SPEC);
         modEventBus.addListener(JeiStructuresNetwork::register);
+        DebugCaptureChunkTickets.TICKET_TYPES.register(modEventBus);
     }
 }
