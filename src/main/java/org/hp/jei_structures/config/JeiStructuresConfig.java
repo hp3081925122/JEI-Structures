@@ -31,13 +31,13 @@ public final class JeiStructuresConfig {
                         "Ticks to wait before sampling mobs after each structure is prepared.",
                         "每个结构准备完成后，采样生物前等待的 tick 数。"
                 )
-                .defineInRange("mobWaitTicks", 10, 0, 200);
+                .defineInRange("mobWaitTicks", 2, 0, 200);
         CAPTURE_PREFETCH_STRUCTURES = builder
                 .comment(
                         "Number of located structures whose chunks are loaded in advance while the current structure is captured.",
                         "采集当前结构时，提前加载后续多少个已定位结构的区块。"
                 )
-                .defineInRange("prefetchStructures", 2, 0, 16);
+                .defineInRange("prefetchStructures", 8, 0, 32);
         CAPTURE_LOCATE_THREADS = builder
                 .comment(
                         "Number of structures located concurrently.",

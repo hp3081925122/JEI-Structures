@@ -64,7 +64,7 @@ public final class DebugStructureCaptureManager {
     private static final DateTimeFormatter RUN_ID_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS");
     private static final int DEFAULT_LOCATE_RADIUS = 128;
     private static final int END_OUTER_ISLAND_OFFSET_X = 1200;
-    private static final int BASE_COOLDOWN_TICKS = 5;
+    private static final int BASE_COOLDOWN_TICKS = 0;
     private static final int LOAD_PROGRESS_MESSAGE_INTERVAL_TICKS = 20;
 
     private static Session activeSession;
@@ -437,7 +437,7 @@ public final class DebugStructureCaptureManager {
                 ensureCaptureTickets(prelocatedTarget);
                 refreshPrefetchTickets();
                 currentAttempt.loadedChunkCount = DebugCaptureChunkTickets.countReadyChunks(currentAttempt.level, currentAttempt.placeChunks);
-                currentAttempt.teleportPos = teleportPlayerToCapturePosition(server, prelocatedTarget.locatedStructure());
+                currentAttempt.teleportPos = resolveTeleportPos(prelocatedTarget.locatedStructure());
                 currentStructureStartMillis = System.currentTimeMillis();
                 sendPlayerMessage(
                         server,
@@ -540,6 +540,7 @@ public final class DebugStructureCaptureManager {
                 }
                 currentAttempt.loadedChunkCount = totalChunks;
             }
+            teleportPlayerTo(level, currentAttempt.teleportPos);
             sendPlayerMessage(
                     server,
                     "jei_structures.command.debug_capture.progress.place_finish",
@@ -717,8 +718,8 @@ public final class DebugStructureCaptureManager {
             if (locatedCaptureQueue.isEmpty()) {
                 return startNextDimensionOrFinish(server);
             }
-            enterPhase(Phase.COOLDOWN);
             cooldownTicks = DebugStructureCaptureCommon.scaleWaitTicks(BASE_COOLDOWN_TICKS, speedMultiplier);
+            enterPhase(cooldownTicks > 0 ? Phase.COOLDOWN : Phase.PREPARE_CAPTURE);
             return false;
         }
 
@@ -1332,19 +1333,6 @@ public final class DebugStructureCaptureManager {
             return sanitized;
         }
 
-        private BlockPos teleportPlayerToCapturePosition(MinecraftServer server, LocatedStructure locatedStructure) {
-            BlockPos teleportPos = resolveTeleportPos(locatedStructure);
-            if (server == null) {
-                return teleportPos;
-            }
-            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
-            if (player == null) {
-                return teleportPos;
-            }
-            teleportPlayerTo(locatedStructure.level(), teleportPos);
-            return teleportPos;
-        }
-
         private void teleportPlayerTo(ServerLevel level, BlockPos pos) {
             if (level == null || pos == null) {
                 return;
@@ -1369,6 +1357,21 @@ public final class DebugStructureCaptureManager {
             int centerX = (box.minX() + box.maxX()) >> 1;
             int centerY = (box.minY() + box.maxY()) >> 1;
             int centerZ = (box.minZ() + box.maxZ()) >> 1;
+            ChunkPos nearestChunk = null;
+            long nearestDistance = Long.MAX_VALUE;
+            for (ChunkPos chunkPos : locatedStructure.placeChunks()) {
+                long dx = Math.clamp(centerX, chunkPos.getMinBlockX(), chunkPos.getMaxBlockX()) - centerX;
+                long dz = Math.clamp(centerZ, chunkPos.getMinBlockZ(), chunkPos.getMaxBlockZ()) - centerZ;
+                long distance = dx * dx + dz * dz;
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestChunk = chunkPos;
+                }
+            }
+            if (nearestChunk != null) {
+                centerX = Math.clamp(centerX, nearestChunk.getMinBlockX(), nearestChunk.getMaxBlockX());
+                centerZ = Math.clamp(centerZ, nearestChunk.getMinBlockZ(), nearestChunk.getMaxBlockZ());
+            }
             int minBuildY = level.getMinBuildHeight();
             int maxBuildY = level.getMaxBuildHeight() - 2;
             return new BlockPos(centerX, Math.min(Math.max(centerY, minBuildY + 1), maxBuildY), centerZ);
