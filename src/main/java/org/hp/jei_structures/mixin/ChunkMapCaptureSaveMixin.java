@@ -22,6 +22,10 @@ public abstract class ChunkMapCaptureSaveMixin {
 
     @Inject(method = "save(Lnet/minecraft/world/level/chunk/ChunkAccess;)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void jei_structures$skipCaptureChunkSave(ChunkAccess chunk, CallbackInfoReturnable<Boolean> callbackInfo) {
+        if (DebugCaptureChunkTickets.isFeatureSkippedChunk(this.level, chunk.getPos())) {
+            callbackInfo.setReturnValue(false);
+            return;
+        }
         if (!DebugCaptureOptimizationGuard.shouldSkipChunkSaving()) {
             return;
         }

@@ -19,7 +19,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -31,6 +33,7 @@ public final class DebugCaptureChunkTickets {
     public static final TicketType<ChunkPos> LOCATE_TICKET = TicketType.create("jei_structures_locate", Comparator.comparingLong(ChunkPos::toLong), 1200);
     private static final long LOCATE_CHUNK_POLL_MILLIS = 50L;
     private static final Map<ResourceKey<Level>, LongSet> CAPTURED_CHUNKS = new HashMap<>();
+    private static final Map<ResourceKey<Level>, Set<Long>> FEATURE_SKIPPED_CHUNKS = new ConcurrentHashMap<>();
 
     private DebugCaptureChunkTickets() {
     }
@@ -69,6 +72,15 @@ public final class DebugCaptureChunkTickets {
     public static boolean isCapturedChunk(ServerLevel level, ChunkPos chunkPos) {
         LongSet captured = CAPTURED_CHUNKS.get(level.dimension());
         return captured != null && captured.contains(chunkPos.toLong());
+    }
+
+    public static void markFeatureSkippedChunk(ServerLevel level, ChunkPos chunkPos) {
+        FEATURE_SKIPPED_CHUNKS.computeIfAbsent(level.dimension(), ignored -> ConcurrentHashMap.newKeySet()).add(chunkPos.toLong());
+    }
+
+    public static boolean isFeatureSkippedChunk(ServerLevel level, ChunkPos chunkPos) {
+        Set<Long> skipped = FEATURE_SKIPPED_CHUNKS.get(level.dimension());
+        return skipped != null && skipped.contains(chunkPos.toLong());
     }
 
     public static ChunkAccess getChunkForLocate(ServerChunkCache chunkSource, int x, int z, ChunkStatus status, boolean requireChunk) {

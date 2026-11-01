@@ -13,6 +13,8 @@ public final class JeiStructuresConfig {
     private static final ModConfigSpec.IntValue CAPTURE_LOCATE_TIMEOUT_SECONDS;
     private static final ModConfigSpec.BooleanValue CAPTURE_SKIP_LIGHTING;
     private static final ModConfigSpec.BooleanValue CAPTURE_SKIP_CHUNK_SAVING;
+    private static final ModConfigSpec.BooleanValue CAPTURE_SKIP_FEATURES;
+    private static final ModConfigSpec.BooleanValue CAPTURE_SKIP_CHUNK_GENERATION_MOBS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -62,6 +64,18 @@ public final class JeiStructuresConfig {
                         "采集期间不保存未完成生成的区块和被采集的结构区块，之后会重新生成。仅用于一次性采集存档。"
                 )
                 .define("skipChunkSaving", true);
+        CAPTURE_SKIP_FEATURES = builder
+                .comment(
+                        "Skip biome features such as trees, ores and lakes for chunks generated during capture. Structure pieces are still placed. These chunks are never saved until the server restarts.",
+                        "采集期间跳过新生成区块的普通地物（树、矿石、湖等），结构本身照常放置。这些区块在服务端重启前都不会保存。"
+                )
+                .define("skipFeatures", true);
+        CAPTURE_SKIP_CHUNK_GENERATION_MOBS = builder
+                .comment(
+                        "Skip biome animals spawned during chunk generation while capturing.",
+                        "采集期间跳过区块生成时按群系刷出的动物。"
+                )
+                .define("skipChunkGenerationMobs", true);
         builder.pop();
         COMMON_SPEC = builder.build();
     }
@@ -99,5 +113,13 @@ public final class JeiStructuresConfig {
 
     public static boolean captureSkipChunkSaving() {
         return CAPTURE_SKIP_CHUNK_SAVING.get();
+    }
+
+    public static boolean captureSkipFeatures() {
+        return CAPTURE_SKIP_FEATURES.get();
+    }
+
+    public static boolean captureSkipChunkGenerationMobs() {
+        return CAPTURE_SKIP_CHUNK_GENERATION_MOBS.get();
     }
 }

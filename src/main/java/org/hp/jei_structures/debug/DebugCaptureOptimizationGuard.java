@@ -28,6 +28,8 @@ public final class DebugCaptureOptimizationGuard {
     private static volatile UUID activePlayerId;
     private static volatile boolean skipLighting;
     private static volatile boolean skipChunkSaving;
+    private static volatile boolean skipFeatures;
+    private static volatile boolean skipChunkGenerationMobs;
 
     private DebugCaptureOptimizationGuard() {
     }
@@ -35,6 +37,8 @@ public final class DebugCaptureOptimizationGuard {
     public static void enable(UUID playerId) {
         skipLighting = JeiStructuresConfig.captureSkipLighting();
         skipChunkSaving = JeiStructuresConfig.captureSkipChunkSaving();
+        skipFeatures = JeiStructuresConfig.captureSkipFeatures();
+        skipChunkGenerationMobs = JeiStructuresConfig.captureSkipChunkGenerationMobs();
         activePlayerId = playerId;
     }
 
@@ -42,6 +46,16 @@ public final class DebugCaptureOptimizationGuard {
         activePlayerId = null;
         skipLighting = false;
         skipChunkSaving = false;
+        skipFeatures = false;
+        skipChunkGenerationMobs = false;
+    }
+
+    public static boolean shouldSkipFeatures() {
+        return skipFeatures;
+    }
+
+    public static boolean shouldSkipChunkGenerationMobs() {
+        return skipChunkGenerationMobs;
     }
 
     public static boolean shouldSkipLighting() {
