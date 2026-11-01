@@ -629,9 +629,7 @@ public final class DebugStructureCaptureManager {
         }
 
         private boolean tickScanLoot() {
-            long start = System.currentTimeMillis();
             scanLootBindings();
-            timingStats.lootMillis += System.currentTimeMillis() - start;
             sendPlayerMessage(
                     server,
                     "jei_structures.command.debug_capture.progress.loot_finish",
@@ -700,7 +698,6 @@ public final class DebugStructureCaptureManager {
         }
 
         private boolean tickScanMobs() {
-            long start = System.currentTimeMillis();
             DebugStructureCaptureScanning.MobSampleResult result = DebugStructureCaptureScanning.captureLivingEntities(
                     new DebugStructureCaptureScanning.ServerLevelContext(
                             currentAttempt.level,
@@ -710,7 +707,6 @@ public final class DebugStructureCaptureManager {
                     currentAttempt.aggregate.mobIds,
                     false
             );
-            timingStats.mobScanMillis += System.currentTimeMillis() - start;
             sendPlayerMessage(
                     server,
                     "jei_structures.command.debug_capture.progress.mob_sample",
@@ -728,18 +724,14 @@ public final class DebugStructureCaptureManager {
         }
 
         private boolean tickClear() {
-            long start = System.currentTimeMillis();
             releaseCaptureTickets(currentPrelocated);
-            timingStats.clearMillis += System.currentTimeMillis() - start;
             enterPhase(Phase.WRITE);
             return false;
         }
 
         private boolean tickWrite() throws Exception {
             if (currentAttempt != null && currentAttempt.successful) {
-                long start = System.currentTimeMillis();
                 writeCurrentStructureFiles();
-                timingStats.writeMillis += System.currentTimeMillis() - start;
                 completedStructureIds.add(currentTarget.structureId().toString());
                 currentDimensionCaptureCompleted++;
                 JeiStructures.LOGGER.info(
