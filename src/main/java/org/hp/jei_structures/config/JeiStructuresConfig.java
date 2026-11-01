@@ -61,7 +61,7 @@ public final class JeiStructuresConfig {
                         "Do not save proto chunks or captured structure chunks during capture. They will be regenerated later. Only use this in a throwaway capture world.",
                         "采集期间不保存未完成生成的区块和被采集的结构区块，之后会重新生成。仅用于一次性采集存档。"
                 )
-                .define("skipChunkSaving", false);
+                .define("skipChunkSaving", true);
         builder.pop();
         COMMON_SPEC = builder.build();
     }
