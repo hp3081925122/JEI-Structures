@@ -25,6 +25,7 @@
     "ServerGamePacketListenerCaptureSyncMixin",
     "ServerLevelTickFreezeMixin",
     "StructureCheckConcurrencyMixin",
+    "StructureTemplatePaletteConcurrencyMixin",
     "ThreadedLevelLightEngineCaptureMixin",
     "WorldBorderFreezeMixin"
   ],
