@@ -27,7 +27,7 @@ public final class JeiStructuresConfig {
                         "Seconds to wait for structure chunks. On the first timeout the structure is moved to the end of the queue while its chunks keep loading; on the second timeout it is skipped and recorded as failed.",
                         "等待结构区块加载的最长秒数。第一次超时会把该结构移到队尾，区块继续在后台加载；第二次超时则跳过并记为失败。"
                 )
-                .defineInRange("chunkLoadTimeoutSeconds", 30, 5, 3600);
+                .defineInRange("chunkLoadTimeoutSeconds", 20, 5, 3600);
         CAPTURE_MOB_WAIT_TICKS = builder
                 .comment(
                         "Ticks to wait before sampling mobs after each structure is prepared.",
