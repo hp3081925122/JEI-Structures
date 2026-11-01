@@ -25,25 +25,40 @@ import java.util.UUID;
 
 public final class DebugCaptureOptimizationGuard {
 
-    private static UUID activePlayerId;
+    private static volatile UUID activePlayerId;
+    private static volatile boolean skipLighting;
+    private static volatile boolean skipChunkSaving;
 
     private DebugCaptureOptimizationGuard() {
     }
 
-    public static synchronized void enable(UUID playerId) {
+    public static void enable(UUID playerId) {
+        skipLighting = JeiStructuresConfig.captureSkipLighting();
+        skipChunkSaving = JeiStructuresConfig.captureSkipChunkSaving();
         activePlayerId = playerId;
     }
 
-    public static synchronized void disable() {
+    public static void disable() {
         activePlayerId = null;
+        skipLighting = false;
+        skipChunkSaving = false;
     }
 
-    public static synchronized boolean isSuppressingPlayerSync(ServerPlayer player) {
+    public static boolean shouldSkipLighting() {
+        return skipLighting;
+    }
+
+    public static boolean shouldSkipChunkSaving() {
+        return skipChunkSaving;
+    }
+
+    public static boolean isSuppressingPlayerSync(ServerPlayer player) {
         return JeiStructuresConfig.silentCaptureTeleport() && isActiveForPlayer(player);
     }
 
-    public static synchronized boolean isActiveForPlayer(ServerPlayer player) {
-        return activePlayerId != null && player != null && activePlayerId.equals(player.getUUID());
+    public static boolean isActiveForPlayer(ServerPlayer player) {
+        UUID playerId = activePlayerId;
+        return playerId != null && player != null && playerId.equals(player.getUUID());
     }
 
     public static boolean shouldSuppressClientboundPacket(ServerPlayer player, Packet<?> packet) {

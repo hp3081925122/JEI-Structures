@@ -5,9 +5,14 @@
   "compatibilityLevel": "JAVA_21",
   "refmap": "jei_structures.refmap.json",
   "mixins": [
+    "ChunkGeneratorLocateCancelMixin",
+    "ChunkMapCaptureSaveMixin",
     "ChunkMapCaptureSyncMixin",
+    "ServerChunkCacheAccessor",
+    "ServerChunkCacheLocateMixin",
     "ServerGamePacketListenerCaptureSyncMixin",
-    "StructureCheckConcurrencyMixin"
+    "StructureCheckConcurrencyMixin",
+    "ThreadedLevelLightEngineCaptureMixin"
   ],
   "client": [
   ],

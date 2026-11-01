@@ -20,6 +20,7 @@ public final class DebugStructureCheckConcurrency {
 
     private static final Set<StructureCheckAccess> REGISTERED_CHECKS = Collections.newSetFromMap(new WeakHashMap<>());
     private static boolean enabled;
+    private static boolean pendingDisable;
 
     private DebugStructureCheckConcurrency() {
     }
@@ -33,13 +34,27 @@ public final class DebugStructureCheckConcurrency {
     }
 
     public static synchronized void enable() {
+        pendingDisable = false;
         enabled = true;
         for (StructureCheckAccess access : REGISTERED_CHECKS) {
             access.jei_structures$setStructureCheckConcurrency(true);
         }
     }
 
+    public static synchronized void requestDisable() {
+        if (enabled) {
+            pendingDisable = true;
+        }
+    }
+
+    public static synchronized void tickPendingDisable() {
+        if (pendingDisable && DebugLocateControl.runningCount() == 0) {
+            disable();
+        }
+    }
+
     public static synchronized void disable() {
+        pendingDisable = false;
         enabled = false;
         for (StructureCheckAccess access : REGISTERED_CHECKS) {
             access.jei_structures$setStructureCheckConcurrency(false);

@@ -56,6 +56,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class DebugStructureCaptureManager {
@@ -64,22 +65,7 @@ public final class DebugStructureCaptureManager {
     private static final int DEFAULT_LOCATE_RADIUS = 128;
     private static final int END_OUTER_ISLAND_OFFSET_X = 1200;
     private static final int BASE_COOLDOWN_TICKS = 5;
-    private static final int PRELOAD_NEXT_STRUCTURE_CHUNKS_PER_TICK = 1;
-    private static final int MAX_CONCURRENT_LOCATE_REQUESTS = 3;
-    private static final long LOCATE_REQUEST_TIMEOUT_MILLIS = 20_000L;
-    private static final ExecutorService LOCATE_EXECUTOR = Executors.newFixedThreadPool(
-            MAX_CONCURRENT_LOCATE_REQUESTS,
-            new ThreadFactory() {
-                private int nextThreadId = 1;
-
-                @Override
-                public synchronized Thread newThread(Runnable runnable) {
-                    Thread thread = new Thread(runnable, "jei-structures-quick-locate-" + nextThreadId++);
-                    thread.setDaemon(true);
-                    return thread;
-                }
-            }
-    );
+    private static final int LOAD_PROGRESS_MESSAGE_INTERVAL_TICKS = 20;
 
     private static Session activeSession;
 
@@ -245,8 +231,13 @@ public final class DebugStructureCaptureManager {
         private final Deque<PrelocatedTarget> locatedCaptureQueue = new ArrayDeque<>();
         private final TimingStats timingStats = new TimingStats();
         private final LootTableItemResolver lootResolver;
+        private final ExecutorService locateExecutor;
+        private final int maxConcurrentLocates;
+        private final long locateTimeoutMillis;
+        private final boolean playerWasInvulnerable;
 
         private StructureTarget currentTarget;
+        private PrelocatedTarget currentPrelocated;
         private AttemptContext currentAttempt;
         private Phase currentPhase = Phase.COOLDOWN;
         private ResourceKey<Level> currentDimensionKey;
@@ -283,8 +274,24 @@ public final class DebugStructureCaptureManager {
             Files.createDirectories(this.outputRoot);
             this.lootResolver = new LootTableItemResolver(server.getResourceManager(), server.registryAccess().registryOrThrow(Registries.ITEM), server.registryAccess(), server.overworld());
             this.cooldownTicks = 0;
+            this.maxConcurrentLocates = JeiStructuresConfig.captureLocateThreads();
+            this.locateTimeoutMillis = JeiStructuresConfig.captureLocateTimeoutSeconds() * 1000L;
+            this.locateExecutor = createLocateExecutor(this.maxConcurrentLocates);
+            this.playerWasInvulnerable = player.isInvulnerable();
+            player.setInvulnerable(true);
+            DebugCaptureChunkTickets.clearCapturedChunks();
             DebugCaptureOptimizationGuard.enable(this.playerId);
             DebugStructureCheckConcurrency.enable();
+        }
+
+        private static ExecutorService createLocateExecutor(int threadCount) {
+            AtomicInteger nextThreadId = new AtomicInteger(1);
+            ThreadFactory threadFactory = runnable -> {
+                Thread thread = new Thread(runnable, "jei-structures-quick-locate-" + nextThreadId.getAndIncrement());
+                thread.setDaemon(true);
+                return thread;
+            };
+            return Executors.newFixedThreadPool(threadCount, threadFactory);
         }
 
         private DebugStructureCaptureTypes.StatusSnapshot createStatusSnapshot() {
@@ -314,9 +321,9 @@ public final class DebugStructureCaptureManager {
                     currentDimensionTargets.size(),
                     currentDimensionLocateSucceeded,
                     activeLocateRequests.size(),
-                    MAX_CONCURRENT_LOCATE_REQUESTS,
+                    maxConcurrentLocates,
                     longestLocateRequest != null ? longestLocateRequest.target().structureId().toString() : "",
-                    longestLocateRequest != null ? toSeconds(System.currentTimeMillis() - longestLocateRequest.startMillis()) : 0L,
+                    longestLocateRequest != null ? toSeconds(longestLocateRequest.elapsedMillis(System.currentTimeMillis())) : 0L,
                     currentDimensionCaptureCompleted,
                     currentDimensionCaptureTotal,
                     outputRoot,
@@ -381,6 +388,7 @@ public final class DebugStructureCaptureManager {
         private boolean tickLocateDimension(MinecraftServer server) throws Exception {
             boolean timeoutChanged = handleLocateTimeouts(server);
             submitLocateRequests(server);
+            refreshPrefetchTickets();
             if (timeoutChanged) {
                 sendDimensionLocateProgress(server);
             }
@@ -418,12 +426,17 @@ public final class DebugStructureCaptureManager {
                 StructureTarget target = prelocatedTarget.target();
                 String structureId = target.structureId().toString();
                 if (completedStructureIds.contains(structureId) || failedStructureIds.contains(structureId)) {
+                    releaseCaptureTickets(prelocatedTarget);
                     continue;
                 }
                 currentTarget = target;
+                currentPrelocated = prelocatedTarget;
                 currentAttempt = new AttemptContext(target.structureId().toString(), target.entry().structureType);
                 currentAttempt.finishLocate(prelocatedTarget.locatedStructure());
-                currentAttempt.loadedChunkCount = prelocatedTarget.preloadedChunkCount();
+                currentAttempt.aggregate.mobIds.addAll(prelocatedTarget.joinedMobIds());
+                ensureCaptureTickets(prelocatedTarget);
+                refreshPrefetchTickets();
+                currentAttempt.loadedChunkCount = DebugCaptureChunkTickets.countReadyChunks(currentAttempt.level, currentAttempt.placeChunks);
                 currentAttempt.teleportPos = teleportPlayerToCapturePosition(server, prelocatedTarget.locatedStructure());
                 currentStructureStartMillis = System.currentTimeMillis();
                 sendPlayerMessage(
@@ -470,11 +483,13 @@ public final class DebugStructureCaptureManager {
         }
 
         private boolean tickLoadChunks() {
-            long start = System.currentTimeMillis();
             ServerLevel level = currentAttempt.level;
             int totalChunks = currentAttempt.placeChunks.size();
+            long now = System.currentTimeMillis();
             if (!currentAttempt.chunkLoadingStarted) {
                 currentAttempt.chunkLoadingStarted = true;
+                currentAttempt.chunkLoadStartMillis = now;
+                ensureCaptureTickets(currentPrelocated);
                 sendPlayerMessage(
                         server,
                         "jei_structures.command.debug_capture.progress.place_loading",
@@ -492,32 +507,38 @@ public final class DebugStructureCaptureManager {
                 );
                 return false;
             }
-            int startIndex = currentAttempt.loadedChunkCount;
-            int endIndex = Math.min(startIndex + JeiStructuresConfig.captureChunkLoadsPerTick(), totalChunks);
-            for (int index = startIndex; index < endIndex; index++) {
-                ChunkPos chunkPos = currentAttempt.placeChunks.get(index);
-                level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.FULL, true);
-            }
-            currentAttempt.loadedChunkCount = endIndex;
-            long batchMillis = System.currentTimeMillis() - start;
-            timingStats.loadChunksMillis += batchMillis;
+            currentAttempt.loadedChunkCount = DebugCaptureChunkTickets.countReadyChunks(level, currentAttempt.placeChunks);
             if (currentAttempt.loadedChunkCount < totalChunks) {
-                sendPlayerMessage(
-                        server,
-                        "jei_structures.command.debug_capture.progress.place_loading",
-                        DebugStructureCaptureSupport.getStructureDisplayComponent(currentTarget.structureId()),
-                        1,
+                if (now - currentAttempt.chunkLoadStartMillis < JeiStructuresConfig.captureChunkLoadTimeoutSeconds() * 1000L) {
+                    if (++currentAttempt.chunkLoadTicks % LOAD_PROGRESS_MESSAGE_INTERVAL_TICKS == 0) {
+                        sendPlayerMessage(
+                                server,
+                                "jei_structures.command.debug_capture.progress.place_loading",
+                                DebugStructureCaptureSupport.getStructureDisplayComponent(currentTarget.structureId()),
+                                1,
+                                currentAttempt.loadedChunkCount,
+                                totalChunks,
+                                currentAttempt.pieceCount,
+                                currentDimensionKey != null ? currentDimensionKey.location() : "",
+                                currentDimensionCaptureCompleted + 1,
+                                currentDimensionCaptureTotal,
+                                completedStructureIds.size(),
+                                targets.size(),
+                                speedMultiplier
+                        );
+                    }
+                    return false;
+                }
+                JeiStructures.LOGGER.warn(
+                        "Structure debug chunk loading timed out, loading remaining chunks synchronously: structure={}, ready={}/{}",
+                        currentTarget.structureId(),
                         currentAttempt.loadedChunkCount,
-                        totalChunks,
-                        currentAttempt.pieceCount,
-                        currentDimensionKey != null ? currentDimensionKey.location() : "",
-                        currentDimensionCaptureCompleted + 1,
-                        currentDimensionCaptureTotal,
-                        completedStructureIds.size(),
-                        targets.size(),
-                        speedMultiplier
+                        totalChunks
                 );
-                return false;
+                for (ChunkPos chunkPos : currentAttempt.placeChunks) {
+                    level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.FULL, true);
+                }
+                currentAttempt.loadedChunkCount = totalChunks;
             }
             sendPlayerMessage(
                     server,
@@ -560,7 +581,6 @@ public final class DebugStructureCaptureManager {
 
         private boolean tickWaitMobs() {
             if (currentAttempt.mobWaitTicks > 0) {
-                preloadNextQueuedStructureChunks();
                 currentAttempt.mobWaitTicks--;
                 return false;
             }
@@ -568,27 +588,36 @@ public final class DebugStructureCaptureManager {
             return false;
         }
 
-        private void preloadNextQueuedStructureChunks() {
-            PrelocatedTarget prelocatedTarget = findNextPreloadTarget();
-            if (prelocatedTarget == null) {
+        private void ensureCaptureTickets(PrelocatedTarget prelocatedTarget) {
+            if (prelocatedTarget == null || prelocatedTarget.ticketsAdded()) {
                 return;
             }
             LocatedStructure locatedStructure = prelocatedTarget.locatedStructure();
-            List<ChunkPos> chunks = locatedStructure.placeChunks();
-            int totalChunks = chunks.size();
-            if (prelocatedTarget.preloadedChunkCount() >= totalChunks) {
-                return;
-            }
-            int endIndex = Math.min(prelocatedTarget.preloadedChunkCount() + PRELOAD_NEXT_STRUCTURE_CHUNKS_PER_TICK, totalChunks);
-            for (int index = prelocatedTarget.preloadedChunkCount(); index < endIndex; index++) {
-                ChunkPos chunkPos = chunks.get(index);
-                locatedStructure.level().getChunk(chunkPos.x, chunkPos.z, ChunkStatus.FULL, true);
-            }
-            prelocatedTarget.setPreloadedChunkCount(endIndex);
+            DebugCaptureChunkTickets.addCaptureTickets(locatedStructure.level(), locatedStructure.placeChunks());
+            prelocatedTarget.setTicketsAdded(true);
         }
 
-        private PrelocatedTarget findNextPreloadTarget() {
+        private void releaseCaptureTickets(PrelocatedTarget prelocatedTarget) {
+            if (prelocatedTarget == null || !prelocatedTarget.ticketsAdded()) {
+                return;
+            }
+            LocatedStructure locatedStructure = prelocatedTarget.locatedStructure();
+            DebugCaptureChunkTickets.removeCaptureTickets(locatedStructure.level(), locatedStructure.placeChunks());
+            prelocatedTarget.setTicketsAdded(false);
+        }
+
+        private void releaseQueuedCaptureTickets() {
             for (PrelocatedTarget prelocatedTarget : locatedCaptureQueue) {
+                releaseCaptureTickets(prelocatedTarget);
+            }
+        }
+
+        private void refreshPrefetchTickets() {
+            int remaining = JeiStructuresConfig.capturePrefetchStructures();
+            for (PrelocatedTarget prelocatedTarget : locatedCaptureQueue) {
+                if (remaining <= 0) {
+                    return;
+                }
                 if (prelocatedTarget == null || prelocatedTarget.target() == null) {
                     continue;
                 }
@@ -596,9 +625,9 @@ public final class DebugStructureCaptureManager {
                 if (completedStructureIds.contains(structureId) || failedStructureIds.contains(structureId)) {
                     continue;
                 }
-                return prelocatedTarget;
+                ensureCaptureTickets(prelocatedTarget);
+                remaining--;
             }
-            return null;
         }
 
         private boolean tickScanMobs() {
@@ -631,6 +660,7 @@ public final class DebugStructureCaptureManager {
 
         private boolean tickClear() {
             long start = System.currentTimeMillis();
+            releaseCaptureTickets(currentPrelocated);
             timingStats.clearMillis += System.currentTimeMillis() - start;
             enterPhase(Phase.WRITE);
             return false;
@@ -676,6 +706,7 @@ public final class DebugStructureCaptureManager {
                 );
             }
             currentTarget = null;
+            currentPrelocated = null;
             currentAttempt = null;
             currentStructureStartMillis = 0L;
             if (stopRequested) {
@@ -692,10 +723,13 @@ public final class DebugStructureCaptureManager {
         }
 
         private boolean startNextDimensionOrFinish(MinecraftServer server) throws Exception {
+            releaseCaptureTickets(currentPrelocated);
+            releaseQueuedCaptureTickets();
             currentTarget = null;
+            currentPrelocated = null;
             currentAttempt = null;
             currentStructureStartMillis = 0L;
-            activeLocateRequests.clear();
+            cancelActiveLocateRequests();
             locatedCaptureQueue.clear();
             while (++currentDimensionIndex < orderedDimensions.size()) {
                 currentDimensionKey = orderedDimensions.get(currentDimensionIndex);
@@ -721,7 +755,7 @@ public final class DebugStructureCaptureManager {
                         currentDimensionTargets.size(),
                         completedStructureIds.size(),
                         targets.size(),
-                        MAX_CONCURRENT_LOCATE_REQUESTS
+                        maxConcurrentLocates
                 );
                 enterPhase(Phase.LOCATE_DIMENSION);
                 return false;
@@ -759,7 +793,7 @@ public final class DebugStructureCaptureManager {
                 sendDimensionLocateProgress(server);
                 return;
             }
-            while (activeLocateRequests.size() < MAX_CONCURRENT_LOCATE_REQUESTS && currentDimensionNextLocateIndex < currentDimensionTargets.size()) {
+            while (activeLocateRequests.size() < maxConcurrentLocates && currentDimensionNextLocateIndex < currentDimensionTargets.size()) {
                 StructureTarget target = currentDimensionTargets.get(currentDimensionNextLocateIndex++);
                 if (completedStructureIds.contains(target.structureId().toString()) || failedStructureIds.contains(target.structureId().toString())) {
                     currentDimensionLocateCompleted++;
@@ -775,30 +809,55 @@ public final class DebugStructureCaptureManager {
             Registry<Structure> structureRegistry = server.registryAccess().registryOrThrow(Registries.STRUCTURE);
             Holder<Structure> structureHolder = structureRegistry.wrapAsHolder(target.structure());
             HolderSet<Structure> structures = HolderSet.direct(structureHolder);
+            DebugLocateControl.LocateToken token = new DebugLocateControl.LocateToken();
             AsyncLocateRequest request = new AsyncLocateRequest(
                     requestId,
                     target,
                     level,
                     locateOrigin,
                     System.currentTimeMillis(),
+                    token,
                     null
             );
             activeLocateRequests.put(requestId, request);
-            Future<?> future = LOCATE_EXECUTOR.submit(() -> {
+            Future<?> future = locateExecutor.submit(() -> {
+                if (token.isCancelled()) {
+                    return;
+                }
                 Pair<BlockPos, Holder<Structure>> result = null;
                 RuntimeException failure = null;
+                DebugLocateControl.begin(token);
                 try {
                     result = level.getChunkSource()
                             .getGenerator()
                             .findNearestMapStructure(level, structures, locateOrigin, DEFAULT_LOCATE_RADIUS, false);
+                } catch (DebugLocateControl.LocateCancelledException exception) {
+                    return;
                 } catch (RuntimeException exception) {
                     failure = exception;
+                } finally {
+                    DebugLocateControl.end();
+                }
+                if (token.isCancelled()) {
+                    return;
                 }
                 Pair<BlockPos, Holder<Structure>> finalResult = result;
                 RuntimeException finalFailure = failure;
                 server.execute(() -> acceptAsyncLocateResult(requestId, finalResult, finalFailure));
             });
-            activeLocateRequests.put(requestId, request.withFuture(future));
+            AsyncLocateRequest submitted = request.withFuture(future);
+            if (activeLocateRequests.containsKey(requestId)) {
+                activeLocateRequests.put(requestId, submitted);
+            }
+        }
+
+        private void cancelActiveLocateRequests() {
+            for (AsyncLocateRequest request : activeLocateRequests.values()) {
+                if (request != null) {
+                    request.cancel();
+                }
+            }
+            activeLocateRequests.clear();
         }
 
         private boolean handleLocateTimeouts(MinecraftServer server) {
@@ -808,24 +867,29 @@ public final class DebugStructureCaptureManager {
             long now = System.currentTimeMillis();
             boolean changed = false;
             for (AsyncLocateRequest request : List.copyOf(activeLocateRequests.values())) {
-                if (now - request.startMillis() < LOCATE_REQUEST_TIMEOUT_MILLIS) {
+                long runStartMillis = request.token().runStartMillis();
+                if (runStartMillis <= 0L || now - runStartMillis < locateTimeoutMillis) {
                     continue;
                 }
                 if (activeLocateRequests.remove(request.requestId()) == null) {
                     continue;
                 }
-                if (request.future() != null) {
-                    request.future().cancel(true);
-                }
+                request.cancel();
                 markDimensionLocateFailure(request.target(), request.level().dimension());
                 currentDimensionLocateCompleted++;
                 changed = true;
+                JeiStructures.LOGGER.warn(
+                        "Structure debug locate timed out: structure={}, dimension={}, timeoutSeconds={}",
+                        request.target().structureId(),
+                        request.level().dimension().location(),
+                        locateTimeoutMillis / 1000L
+                );
                 sendPlayerMessage(
                         server,
                         "jei_structures.command.debug_capture.progress.dimension_locate_timeout",
                         DebugStructureCaptureSupport.getStructureDisplayComponent(request.target().structureId()),
                         request.level().dimension().location(),
-                        LOCATE_REQUEST_TIMEOUT_MILLIS / 1000L,
+                        locateTimeoutMillis / 1000L,
                         currentDimensionLocateCompleted,
                         currentDimensionTargets.size()
                 );
@@ -907,9 +971,9 @@ public final class DebugStructureCaptureManager {
                     currentDimensionTargets.size(),
                     currentDimensionLocateSucceeded,
                     activeLocateRequests.size(),
-                    MAX_CONCURRENT_LOCATE_REQUESTS,
+                    maxConcurrentLocates,
                     longestLocateRequest != null ? DebugStructureCaptureSupport.getStructureDisplayComponent(longestLocateRequest.target().structureId()) : Component.literal("-"),
-                    longestLocateRequest != null ? formatDuration(toSeconds(System.currentTimeMillis() - longestLocateRequest.startMillis())) : "-",
+                    longestLocateRequest != null ? formatDuration(toSeconds(longestLocateRequest.elapsedMillis(System.currentTimeMillis()))) : "-",
                     completedStructureIds.size(),
                     targets.size()
             );
@@ -940,14 +1004,14 @@ public final class DebugStructureCaptureManager {
             if (level == null || target == null || locatePos == null) {
                 return null;
             }
-            StructureStart structureStart = level.structureManager().getStructureWithPieceAt(locatePos, target.structure());
+            ChunkPos chunkPos = new ChunkPos(locatePos);
+            StructureStart structureStart = level.structureManager().getStartForStructure(
+                    SectionPos.of(locatePos),
+                    target.structure(),
+                    level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.STRUCTURE_STARTS)
+            );
             if (structureStart == null || !structureStart.isValid()) {
-                ChunkPos chunkPos = new ChunkPos(locatePos);
-                structureStart = level.structureManager().getStartForStructure(
-                        SectionPos.of(locatePos),
-                        target.structure(),
-                        level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.STRUCTURE_STARTS)
-                );
+                structureStart = level.structureManager().getStructureWithPieceAt(locatePos, target.structure());
             }
             if (structureStart == null || !structureStart.isValid()) {
                 return null;
@@ -1030,33 +1094,33 @@ public final class DebugStructureCaptureManager {
             if (StructureCaptureEntityFilter.isNaturalSpawn(livingEntity)) {
                 return;
             }
-            if (level != currentAttemptLevel()) {
-                return;
-            }
-            if (currentTarget == null || currentAttempt == null || currentAttempt.box == null) {
-                return;
-            }
-            if (!isInsideCurrentBox(entity)) {
-                return;
-            }
             ResourceLocation entityId = BuiltInRegistries.ENTITY_TYPE.getKey(livingEntity.getType());
             if (entityId == null) {
                 return;
             }
-            currentAttempt.aggregate.mobIds.add(entityId.toString());
+            if (currentTarget != null && currentAttempt != null && currentAttempt.box != null && level == currentAttempt.level && isInsideBox(entity, currentAttempt.box)) {
+                currentAttempt.aggregate.mobIds.add(entityId.toString());
+                return;
+            }
+            for (PrelocatedTarget prelocatedTarget : locatedCaptureQueue) {
+                if (prelocatedTarget == null || !prelocatedTarget.ticketsAdded()) {
+                    continue;
+                }
+                LocatedStructure locatedStructure = prelocatedTarget.locatedStructure();
+                if (level == locatedStructure.level() && isInsideBox(entity, locatedStructure.box())) {
+                    prelocatedTarget.joinedMobIds().add(entityId.toString());
+                    return;
+                }
+            }
         }
 
-        private Level currentAttemptLevel() {
-            return currentAttempt != null ? currentAttempt.level : null;
-        }
-
-        private boolean isInsideCurrentBox(Entity entity) {
-            return entity.getX() >= currentAttempt.box.minX()
-                    && entity.getX() < currentAttempt.box.maxX() + 1.0D
-                    && entity.getY() >= currentAttempt.box.minY()
-                    && entity.getY() < currentAttempt.box.maxY() + 1.0D
-                    && entity.getZ() >= currentAttempt.box.minZ()
-                    && entity.getZ() < currentAttempt.box.maxZ() + 1.0D;
+        private static boolean isInsideBox(Entity entity, BoundingBox box) {
+            return entity.getX() >= box.minX()
+                    && entity.getX() < box.maxX() + 1.0D
+                    && entity.getY() >= box.minY()
+                    && entity.getY() < box.maxY() + 1.0D
+                    && entity.getZ() >= box.minZ()
+                    && entity.getZ() < box.maxZ() + 1.0D;
         }
 
         private void writeCurrentStructureFiles() throws Exception {
@@ -1150,14 +1214,12 @@ public final class DebugStructureCaptureManager {
             if (cleanedUp) {
                 return;
             }
-            for (AsyncLocateRequest request : activeLocateRequests.values()) {
-                if (request != null && request.future() != null) {
-                    request.future().cancel(true);
-                }
-            }
-            activeLocateRequests.clear();
+            cancelActiveLocateRequests();
+            locateExecutor.shutdownNow();
+            releaseCaptureTickets(currentPrelocated);
+            releaseQueuedCaptureTickets();
             DebugCaptureOptimizationGuard.disable();
-            DebugStructureCheckConcurrency.disable();
+            DebugStructureCheckConcurrency.requestDisable();
             cleanedUp = true;
         }
 
@@ -1312,43 +1374,6 @@ public final class DebugStructureCaptureManager {
             return new BlockPos(centerX, Math.min(Math.max(centerY, minBuildY + 1), maxBuildY), centerZ);
         }
 
-        private BlockPos findSafeStandingPos(ServerLevel level, BlockPos origin, int minBuildY, int maxBuildY) {
-            int x = origin.getX();
-            int z = origin.getZ();
-            int startY = Math.min(Math.max(origin.getY(), minBuildY + 1), maxBuildY);
-            for (int step = 0; step <= 20; step++) {
-                int upY = startY + step;
-                if (upY <= maxBuildY) {
-                    BlockPos candidate = new BlockPos(x, upY, z);
-                    if (isSafeStandingPos(level, candidate)) {
-                        return candidate;
-                    }
-                }
-                if (step == 0) {
-                    continue;
-                }
-                int downY = startY - step;
-                if (downY > minBuildY) {
-                    BlockPos candidate = new BlockPos(x, downY, z);
-                    if (isSafeStandingPos(level, candidate)) {
-                        return candidate;
-                    }
-                }
-            }
-            return null;
-        }
-
-        private boolean isSafeStandingPos(ServerLevel level, BlockPos pos) {
-            BlockPos above = pos.above();
-            BlockPos below = pos.below();
-            BlockState feetState = level.getBlockState(pos);
-            BlockState headState = level.getBlockState(above);
-            BlockState belowState = level.getBlockState(below);
-            return feetState.getCollisionShape(level, pos).isEmpty()
-                    && headState.getCollisionShape(level, above).isEmpty()
-                    && !belowState.getCollisionShape(level, below).isEmpty();
-        }
-
         private void restorePlayer(MinecraftServer server) {
             if (server == null) {
                 return;
@@ -1357,6 +1382,7 @@ public final class DebugStructureCaptureManager {
             if (player == null) {
                 return;
             }
+            player.setInvulnerable(playerWasInvulnerable);
             ServerLevel level = server.getLevel(playerLevelKey);
             if (level == null) {
                 return;
@@ -1383,6 +1409,8 @@ public final class DebugStructureCaptureManager {
         private int pieceCount;
         private int mobWaitTicks;
         private int loadedChunkCount;
+        private int chunkLoadTicks;
+        private long chunkLoadStartMillis;
         private boolean chunkLoadingStarted;
         private boolean successful;
 
@@ -1591,7 +1619,8 @@ public final class DebugStructureCaptureManager {
     private static final class PrelocatedTarget {
         private final StructureTarget target;
         private final LocatedStructure locatedStructure;
-        private int preloadedChunkCount;
+        private final LinkedHashSet<String> joinedMobIds = new LinkedHashSet<>();
+        private boolean ticketsAdded;
 
         private PrelocatedTarget(StructureTarget target, LocatedStructure locatedStructure) {
             this.target = target;
@@ -1606,12 +1635,16 @@ public final class DebugStructureCaptureManager {
             return locatedStructure;
         }
 
-        private int preloadedChunkCount() {
-            return preloadedChunkCount;
+        private LinkedHashSet<String> joinedMobIds() {
+            return joinedMobIds;
         }
 
-        private void setPreloadedChunkCount(int preloadedChunkCount) {
-            this.preloadedChunkCount = preloadedChunkCount;
+        private boolean ticketsAdded() {
+            return ticketsAdded;
+        }
+
+        private void setTicketsAdded(boolean ticketsAdded) {
+            this.ticketsAdded = ticketsAdded;
         }
     }
 
@@ -1621,10 +1654,23 @@ public final class DebugStructureCaptureManager {
             ServerLevel level,
             BlockPos searchOrigin,
             long startMillis,
+            DebugLocateControl.LocateToken token,
             Future<?> future
     ) {
         private AsyncLocateRequest withFuture(Future<?> future) {
-            return new AsyncLocateRequest(requestId, target, level, searchOrigin, startMillis, future);
+            return new AsyncLocateRequest(requestId, target, level, searchOrigin, startMillis, token, future);
+        }
+
+        private void cancel() {
+            token.cancel();
+            if (future != null) {
+                future.cancel(false);
+            }
+        }
+
+        private long elapsedMillis(long now) {
+            long runStartMillis = token.runStartMillis();
+            return runStartMillis > 0L ? now - runStartMillis : 0L;
         }
     }
 
