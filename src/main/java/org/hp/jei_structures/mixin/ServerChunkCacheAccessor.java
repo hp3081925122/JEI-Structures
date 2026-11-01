@@ -18,6 +18,9 @@ public interface ServerChunkCacheAccessor {
     @Accessor("distanceManager")
     DistanceManager jei_structures$getDistanceManager();
 
+    @Invoker("getVisibleChunkIfPresent")
+    ChunkHolder jei_structures$getVisibleChunkIfPresent(long chunkPos);
+
     @Invoker("getChunkFutureMainThread")
     CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> jei_structures$getChunkFutureMainThread(int x, int z, ChunkStatus status, boolean requireChunk);
 }

@@ -1,6 +1,7 @@
 package org.hp.jei_structures.debug;
 
 import com.mojang.datafixers.util.Either;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.resources.ResourceKey;
@@ -38,6 +39,7 @@ public final class DebugCaptureChunkTickets {
     public static final TicketType<ChunkPos> LOCATE_TICKET = TicketType.create("jei_structures_locate", Comparator.comparingLong(ChunkPos::toLong), 1200);
     private static final long LOCATE_CHUNK_POLL_MILLIS = 50L;
     private static final Map<ResourceKey<Level>, LongSet> CAPTURED_CHUNKS = new HashMap<>();
+    private static final Map<ResourceKey<Level>, Long2IntOpenHashMap> CAPTURE_TICKET_COUNTS = new HashMap<>();
     private static final Map<ResourceKey<Level>, Set<Long>> FEATURE_SKIPPED_CHUNKS = new ConcurrentHashMap<>();
 
     private DebugCaptureChunkTickets() {
@@ -46,8 +48,11 @@ public final class DebugCaptureChunkTickets {
     public static void addCaptureTickets(ServerLevel level, List<ChunkPos> chunks) {
         ServerChunkCache chunkSource = level.getChunkSource();
         LongSet captured = CAPTURED_CHUNKS.computeIfAbsent(level.dimension(), ignored -> new LongOpenHashSet());
+        Long2IntOpenHashMap counts = CAPTURE_TICKET_COUNTS.computeIfAbsent(level.dimension(), ignored -> new Long2IntOpenHashMap());
         for (ChunkPos chunkPos : chunks) {
-            chunkSource.addRegionTicket(CAPTURE_TICKET, chunkPos, 0, chunkPos);
+            if (counts.addTo(chunkPos.toLong(), 1) == 0) {
+                chunkSource.addRegionTicket(CAPTURE_TICKET, chunkPos, 0, chunkPos);
+            }
             captured.add(chunkPos.toLong());
         }
     }
@@ -62,8 +67,22 @@ public final class DebugCaptureChunkTickets {
 
     public static void removeCaptureTickets(ServerLevel level, List<ChunkPos> chunks) {
         ServerChunkCache chunkSource = level.getChunkSource();
+        Long2IntOpenHashMap counts = CAPTURE_TICKET_COUNTS.get(level.dimension());
+        if (counts == null) {
+            return;
+        }
         for (ChunkPos chunkPos : chunks) {
-            chunkSource.removeRegionTicket(CAPTURE_TICKET, chunkPos, 0, chunkPos);
+            long key = chunkPos.toLong();
+            int count = counts.get(key);
+            if (count <= 0) {
+                continue;
+            }
+            if (count == 1) {
+                counts.remove(key);
+                chunkSource.removeRegionTicket(CAPTURE_TICKET, chunkPos, 0, chunkPos);
+            } else {
+                counts.put(key, count - 1);
+            }
         }
     }
 
@@ -80,6 +99,7 @@ public final class DebugCaptureChunkTickets {
 
     public static void clearCapturedChunks() {
         CAPTURED_CHUNKS.clear();
+        CAPTURE_TICKET_COUNTS.clear();
     }
 
     public static boolean isCapturedChunk(ServerLevel level, ChunkPos chunkPos) {
@@ -127,6 +147,55 @@ public final class DebugCaptureChunkTickets {
                 player != null ? player.chunkPosition() : "none",
                 builder
         );
+    }
+
+    public static void logUnreadyChunks(ServerLevel level, List<ChunkPos> chunks, String structureId) {
+        ServerChunkCache chunkSource = level.getChunkSource();
+        ServerChunkCacheAccessor accessor = (ServerChunkCacheAccessor) chunkSource;
+        for (ChunkPos chunkPos : chunks) {
+            boolean full = chunkSource.getChunkNow(chunkPos.x, chunkPos.z) != null;
+            boolean entities = level.areEntitiesLoaded(chunkPos.toLong());
+            if (full && entities) {
+                continue;
+            }
+            ChunkHolder holder = accessor.jei_structures$getVisibleChunkIfPresent(chunkPos.toLong());
+            StringBuilder statuses = new StringBuilder();
+            String lastStatus = "none";
+            int ticketLevel = -1;
+            if (holder != null) {
+                ticketLevel = holder.getTicketLevel();
+                ChunkStatus last = holder.getLastAvailableStatus();
+                lastStatus = last != null ? last.toString() : "none";
+                for (ChunkStatus status : ChunkStatus.getStatusList()) {
+                    CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> future = holder.getFutureIfPresentUnchecked(status);
+                    if (future == ChunkHolder.UNLOADED_CHUNK_FUTURE) {
+                        continue;
+                    }
+                    String state;
+                    if (!future.isDone()) {
+                        state = "pending";
+                    } else if (future.isCompletedExceptionally()) {
+                        state = "exception";
+                    } else {
+                        Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = future.getNow(null);
+                        state = either != null && either.left().isPresent() ? "ok" : "fail:" + (either != null ? either.right().orElse(null) : "null");
+                    }
+                    statuses.append(' ').append(status).append('=').append(state);
+                }
+            }
+            JeiStructures.LOGGER.info(
+                    "[JEI_DEBUG] unready chunk structure={} chunk=[{}, {}] full={} entitiesLoaded={} holder={} ticketLevel={} lastStatus={} futures:{}",
+                    structureId,
+                    chunkPos.x,
+                    chunkPos.z,
+                    full,
+                    entities,
+                    holder != null,
+                    ticketLevel,
+                    lastStatus,
+                    statuses
+            );
+        }
     }
 
     public static ChunkAccess getChunkForLocate(ServerChunkCache chunkSource, int x, int z, ChunkStatus status, boolean requireChunk) {

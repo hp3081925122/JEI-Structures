@@ -581,6 +581,7 @@ public final class DebugStructureCaptureManager {
                     return false;
                 }
                 String structureId = currentTarget.structureId().toString();
+                DebugCaptureChunkTickets.logUnreadyChunks(level, currentAttempt.placeChunks, currentTarget.structureId().toString());
                 if (chunkTimeoutRetriedIds.add(structureId)) {
                     JeiStructures.LOGGER.warn(
                             "Structure debug chunk loading timed out, moving to end of queue: structure={}, ready={}/{}",
