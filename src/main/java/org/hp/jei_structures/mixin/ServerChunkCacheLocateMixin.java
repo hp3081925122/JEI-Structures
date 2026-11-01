@@ -16,6 +16,7 @@ public abstract class ServerChunkCacheLocateMixin {
     @Inject(method = "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;", at = @At("HEAD"), cancellable = true, remap = false)
     private void jei_structures$getChunkForLocate(int x, int z, ChunkStatus status, boolean requireChunk, CallbackInfoReturnable<ChunkAccess> callbackInfo) {
         if (!DebugLocateControl.isLocateThread()) {
+            DebugCaptureChunkTickets.logMainThreadSyncLoad((ServerChunkCache) (Object) this, x, z, status, requireChunk);
             return;
         }
         callbackInfo.setReturnValue(DebugCaptureChunkTickets.getChunkForLocate((ServerChunkCache) (Object) this, x, z, status, requireChunk));

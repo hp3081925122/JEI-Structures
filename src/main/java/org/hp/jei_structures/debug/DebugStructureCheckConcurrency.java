@@ -77,7 +77,7 @@ public final class DebugStructureCheckConcurrency {
                 if (entry.getValue() != null) {
                     valueCopy.putAll(entry.getValue());
                 }
-                copy.put(entry.getKey(), Long2BooleanMaps.synchronize(valueCopy));
+                copy.put(entry.getKey(), new DebugComputeOutsideLockLong2BooleanMap(valueCopy));
             }
         }
         return copy;
@@ -87,7 +87,7 @@ public final class DebugStructureCheckConcurrency {
         return new ConcurrentHashMap<>() {
             @Override
             public Long2BooleanMap computeIfAbsent(Structure key, Function<? super Structure, ? extends Long2BooleanMap> mappingFunction) {
-                return super.computeIfAbsent(key, structure -> Long2BooleanMaps.synchronize(new Long2BooleanOpenHashMap()));
+                return super.computeIfAbsent(key, structure -> new DebugComputeOutsideLockLong2BooleanMap(new Long2BooleanOpenHashMap()));
             }
         };
     }

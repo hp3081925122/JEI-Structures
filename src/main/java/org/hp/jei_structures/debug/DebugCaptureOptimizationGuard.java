@@ -50,6 +50,14 @@ public final class DebugCaptureOptimizationGuard {
         skipChunkGenerationMobs = false;
     }
 
+    public static boolean isCaptureActive() {
+        return activePlayerId != null;
+    }
+
+    public static UUID activePlayerId() {
+        return activePlayerId;
+    }
+
     public static boolean shouldSkipFeatures() {
         return skipFeatures;
     }

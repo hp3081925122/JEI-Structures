@@ -214,6 +214,11 @@ public final class DebugStructureCaptureManager {
     private static final class Session {
         private final MinecraftServer server;
         private final UUID playerId;
+        private ServerLevel playerHoldLevel;
+        private ChunkPos playerHoldChunk;
+        private ServerLevel previousPlayerHoldLevel;
+        private ChunkPos previousPlayerHoldChunk;
+        private boolean frozeTicks;
         private final ResourceKey<Level> playerLevelKey;
         private final BlockPos baseOrigin;
         private final float baseYaw;
@@ -286,6 +291,11 @@ public final class DebugStructureCaptureManager {
             DebugCaptureChunkTickets.clearCapturedChunks();
             DebugCaptureOptimizationGuard.enable(this.playerId);
             DebugStructureCheckConcurrency.enable();
+            DebugCaptureStallWatchdog.start(player.getServer().getRunningThread());
+            if (!player.getServer().tickRateManager().isFrozen()) {
+                player.getServer().tickRateManager().setFrozen(true);
+                frozeTicks = true;
+            }
         }
 
         private static ExecutorService createLocateExecutor(int threadCount) {
@@ -1286,6 +1296,12 @@ public final class DebugStructureCaptureManager {
             releaseCaptureTickets(currentPrelocated);
             releaseQueuedCaptureTickets();
             DebugCaptureOptimizationGuard.disable();
+            DebugCaptureStallWatchdog.stop();
+            releasePlayerHold();
+            if (frozeTicks) {
+                server.tickRateManager().setFrozen(false);
+                frozeTicks = false;
+            }
             DebugStructureCheckConcurrency.requestDisable();
             cleanedUp = true;
         }
@@ -1407,6 +1423,13 @@ public final class DebugStructureCaptureManager {
             if (player == null) {
                 return;
             }
+            ChunkPos targetChunk = new ChunkPos(pos);
+            DebugCaptureChunkTickets.addPlayerHoldTicket(level, targetChunk);
+            releasePreviousPlayerHold();
+            previousPlayerHoldLevel = playerHoldLevel;
+            previousPlayerHoldChunk = playerHoldChunk;
+            playerHoldLevel = level;
+            playerHoldChunk = targetChunk;
             player.teleportTo(
                     level,
                     pos.getX() + 0.5D,
@@ -1415,6 +1438,23 @@ public final class DebugStructureCaptureManager {
                     player.getYRot(),
                     player.getXRot()
             );
+        }
+
+        private void releasePreviousPlayerHold() {
+            if (previousPlayerHoldLevel != null && previousPlayerHoldChunk != null) {
+                DebugCaptureChunkTickets.removePlayerHoldTicket(previousPlayerHoldLevel, previousPlayerHoldChunk);
+            }
+            previousPlayerHoldLevel = null;
+            previousPlayerHoldChunk = null;
+        }
+
+        private void releasePlayerHold() {
+            releasePreviousPlayerHold();
+            if (playerHoldLevel != null && playerHoldChunk != null) {
+                DebugCaptureChunkTickets.removePlayerHoldTicket(playerHoldLevel, playerHoldChunk);
+            }
+            playerHoldLevel = null;
+            playerHoldChunk = null;
         }
 
         private BlockPos resolveTeleportPos(LocatedStructure locatedStructure) {

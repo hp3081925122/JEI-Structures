@@ -12,6 +12,7 @@ import org.hp.jei_structures.command.StructureExportCommands;
 import org.hp.jei_structures.data.StructureIndexCache;
 import org.hp.jei_structures.data.StructureIndexCacheLoader;
 import org.hp.jei_structures.debug.DebugStructureCaptureManager;
+import org.hp.jei_structures.debug.DebugCaptureStallWatchdog;
 import org.hp.jei_structures.debug.DebugStructureCheckConcurrency;
 import org.hp.jei_structures.debug.StructureCaptureEntityFilter;
 import org.hp.jei_structures.export.StructureIndexExporter;
@@ -29,7 +30,13 @@ public final class ForgeEvents {
     }
 
     @SubscribeEvent
+    public static void onServerTickPre(ServerTickEvent.Pre event) {
+        DebugCaptureStallWatchdog.markProgress();
+    }
+
+    @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
+        DebugCaptureStallWatchdog.markProgress();
         DebugStructureCheckConcurrency.tickPendingDisable();
         DebugStructureCaptureManager.tick(event.getServer());
         CurrentStructureTracker.tick(event.getServer());
