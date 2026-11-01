@@ -128,8 +128,12 @@ After collection is finished, run:
 `export` automatically merges configs, data pack bindings, and captured results from `exports`, then generates the index file used by JEI:
 
 ```text
-config/jei_structures/structure_index.json
+config/jei_structures/structure_index.cache
 ```
+
+该索引采用 GZIP 压缩二进制格式，同一战利品表的详细条目只共享保存一次。导出成功后会删除过时的 structure_index.json；旧版 JSON 索引不会再被读取，升级后需要重新执行一次 export。二进制索引不能直接作为 JSON 编辑。
+
+The index uses GZIP-compressed binary storage with shared loot table details. A successful export removes the obsolete structure_index.json; legacy JSON indexes are no longer read, so run export again after upgrading. The binary index cannot be edited as JSON.
 
 整合包作者可以把这个文件随整合包一起分发。普通玩家通常只需要这个文件，不需要自己运行 `debug_capture_quick`。
 
