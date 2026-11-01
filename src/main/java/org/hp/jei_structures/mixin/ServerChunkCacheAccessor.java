@@ -1,5 +1,6 @@
 package org.hp.jei_structures.mixin;
 
+import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkResult;
 import net.minecraft.server.level.DistanceManager;
 import net.minecraft.server.level.ServerChunkCache;
@@ -16,6 +17,9 @@ public interface ServerChunkCacheAccessor {
 
     @Accessor(value = "distanceManager", remap = false)
     DistanceManager jei_structures$getDistanceManager();
+
+    @Invoker(value = "getVisibleChunkIfPresent", remap = false)
+    ChunkHolder jei_structures$getVisibleChunkIfPresent(long chunkPos);
 
     @Invoker(value = "getChunkFutureMainThread", remap = false)
     CompletableFuture<ChunkResult<ChunkAccess>> jei_structures$getChunkFutureMainThread(int x, int z, ChunkStatus status, boolean requireChunk);
