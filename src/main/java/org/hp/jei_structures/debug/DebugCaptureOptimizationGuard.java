@@ -25,25 +25,75 @@ import java.util.UUID;
 
 public final class DebugCaptureOptimizationGuard {
 
-    private static UUID activePlayerId;
+    private static volatile UUID activePlayerId;
+    private static volatile boolean skipLighting;
+    private static volatile boolean skipChunkSaving;
+    private static volatile boolean skipFeatures;
+    private static volatile boolean skipChunkGenerationMobs;
+    private static final ThreadLocal<Boolean> FEATURE_DECORATION = new ThreadLocal<>();
 
     private DebugCaptureOptimizationGuard() {
     }
 
-    public static synchronized void enable(UUID playerId) {
+    public static void enable(UUID playerId) {
+        skipLighting = JeiStructuresConfig.captureSkipLighting();
+        skipChunkSaving = JeiStructuresConfig.captureSkipChunkSaving();
+        skipFeatures = JeiStructuresConfig.captureSkipFeatures();
+        skipChunkGenerationMobs = JeiStructuresConfig.captureSkipChunkGenerationMobs();
         activePlayerId = playerId;
     }
 
-    public static synchronized void disable() {
+    public static void disable() {
         activePlayerId = null;
+        skipLighting = false;
+        skipChunkSaving = false;
+        skipFeatures = false;
+        skipChunkGenerationMobs = false;
     }
 
-    public static synchronized boolean isSuppressingPlayerSync(ServerPlayer player) {
+    public static boolean isCaptureActive() {
+        return activePlayerId != null;
+    }
+
+    public static UUID activePlayerId() {
+        return activePlayerId;
+    }
+
+    public static boolean shouldSkipFeatures() {
+        return skipFeatures;
+    }
+
+    public static void beginFeatureDecoration() {
+        FEATURE_DECORATION.set(Boolean.TRUE);
+    }
+
+    public static void endFeatureDecoration() {
+        FEATURE_DECORATION.remove();
+    }
+
+    public static boolean shouldSkipDecorationFeature() {
+        return skipFeatures && FEATURE_DECORATION.get() != null;
+    }
+
+    public static boolean shouldSkipChunkGenerationMobs() {
+        return skipChunkGenerationMobs;
+    }
+
+    public static boolean shouldSkipLighting() {
+        return skipLighting;
+    }
+
+    public static boolean shouldSkipChunkSaving() {
+        return skipChunkSaving;
+    }
+
+    public static boolean isSuppressingPlayerSync(ServerPlayer player) {
         return JeiStructuresConfig.silentCaptureTeleport() && isActiveForPlayer(player);
     }
 
-    public static synchronized boolean isActiveForPlayer(ServerPlayer player) {
-        return activePlayerId != null && player != null && activePlayerId.equals(player.getUUID());
+    public static boolean isActiveForPlayer(ServerPlayer player) {
+        UUID playerId = activePlayerId;
+        return playerId != null && player != null && playerId.equals(player.getUUID());
     }
 
     public static boolean shouldSuppressClientboundPacket(ServerPlayer player, Packet<?> packet) {

@@ -12,6 +12,8 @@ import org.hp.jei_structures.command.StructureExportCommands;
 import org.hp.jei_structures.data.StructureIndexCache;
 import org.hp.jei_structures.data.StructureIndexCacheLoader;
 import org.hp.jei_structures.debug.DebugStructureCaptureManager;
+import org.hp.jei_structures.debug.DebugCaptureStallWatchdog;
+import org.hp.jei_structures.debug.DebugStructureCheckConcurrency;
 import org.hp.jei_structures.debug.StructureCaptureEntityFilter;
 import org.hp.jei_structures.export.StructureIndexExporter;
 import org.hp.jei_structures.tracker.CurrentStructureTracker;
@@ -31,9 +33,11 @@ public final class ForgeEvents {
 
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
+        DebugCaptureStallWatchdog.markProgress();
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
+        DebugStructureCheckConcurrency.tickPendingDisable();
         DebugStructureCaptureManager.tick(event.getServer());
         CurrentStructureTracker.tick(event.getServer());
     }
@@ -56,7 +60,11 @@ public final class ForgeEvents {
     // 在自然生成流程结束前给生物写入可持久化的自然生成标记。
     @SubscribeEvent
     public static void onFinalizeSpawn(MobSpawnEvent.FinalizeSpawn event) {
-        if (event.getSpawnType() != MobSpawnType.NATURAL) {
+        MobSpawnType spawnType = event.getSpawnType();
+        if (spawnType != MobSpawnType.NATURAL
+                && spawnType != MobSpawnType.CHUNK_GENERATION
+                && spawnType != MobSpawnType.PATROL
+                && spawnType != MobSpawnType.EVENT) {
             return;
         }
         StructureCaptureEntityFilter.markNaturalSpawn(event.getEntity());
