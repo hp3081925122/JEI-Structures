@@ -100,7 +100,9 @@ public final class DebugCaptureChunkTickets {
         if (requireChunk) {
             future.whenComplete((result, throwable) -> server.execute(() -> accessor.jei_structures$getDistanceManager().removeTicket(LOCATE_TICKET, chunkPos, ticketLevel, chunkPos)));
         }
+        long jeiDebugWaitStart = System.nanoTime();
         ChunkResult<ChunkAccess> result = awaitLocateFuture(future);
+        DebugLocateControl.recordChunkWait(System.nanoTime() - jeiDebugWaitStart);
         ChunkAccess chunk = result.orElse(null);
         if (chunk == null && requireChunk) {
             throw new IllegalStateException("Chunk not there when requested: " + result.getError());

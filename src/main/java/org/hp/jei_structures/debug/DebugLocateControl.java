@@ -1,5 +1,10 @@
 package org.hp.jei_structures.debug;
 
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class DebugLocateControl {
@@ -17,6 +22,10 @@ public final class DebugLocateControl {
     }
 
     public static void end() {
+        LocateToken token = CURRENT.get();
+        if (token != null) {
+            token.runEndMillis = System.currentTimeMillis();
+        }
         CURRENT.remove();
         RUNNING.decrementAndGet();
     }
@@ -36,6 +45,28 @@ public final class DebugLocateControl {
         }
     }
 
+    public static void recordSimulatedStart(StructureStart start) {
+        LocateToken token = CURRENT.get();
+        if (token != null) {
+            token.simulatedStarts.put(start.getChunkPos().toLong(), start);
+        }
+    }
+
+    public static void recordCandidate() {
+        LocateToken token = CURRENT.get();
+        if (token != null) {
+            token.candidates++;
+        }
+    }
+
+    public static void recordChunkWait(long nanos) {
+        LocateToken token = CURRENT.get();
+        if (token != null) {
+            token.chunkWaitNanos += nanos;
+            token.chunkLoads++;
+        }
+    }
+
     public static int runningCount() {
         return RUNNING.get();
     }
@@ -43,6 +74,11 @@ public final class DebugLocateControl {
     public static final class LocateToken {
         private volatile boolean cancelled;
         private volatile long runStartMillis;
+        private volatile long runEndMillis;
+        private volatile int candidates;
+        private volatile int chunkLoads;
+        private volatile long chunkWaitNanos;
+        private final Map<Long, StructureStart> simulatedStarts = new ConcurrentHashMap<>();
 
         public void cancel() {
             cancelled = true;
@@ -52,8 +88,21 @@ public final class DebugLocateControl {
             return cancelled;
         }
 
+        public StructureStart simulatedStart(ChunkPos chunkPos) {
+            return simulatedStarts.get(chunkPos.toLong());
+        }
+
         public long runStartMillis() {
             return runStartMillis;
+        }
+
+        public String debugSummary(long submitMillis) {
+            long end = runEndMillis > 0L ? runEndMillis : System.currentTimeMillis();
+            return "queueMs=" + (runStartMillis > 0L ? runStartMillis - submitMillis : -1L)
+                    + " runMs=" + (runStartMillis > 0L ? end - runStartMillis : -1L)
+                    + " candidates=" + candidates
+                    + " chunkLoads=" + chunkLoads
+                    + " chunkWaitMs=" + chunkWaitNanos / 1_000_000L;
         }
     }
 
