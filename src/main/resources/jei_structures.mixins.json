@@ -14,6 +14,7 @@
     "ServerChunkCacheLocateMixin",
     "ServerGamePacketListenerCaptureSyncMixin",
     "StructureCheckConcurrencyMixin",
+    "StructureTemplatePaletteConcurrencyMixin",
     "ThreadedLevelLightEngineCaptureMixin"
   ],
   "client": [
