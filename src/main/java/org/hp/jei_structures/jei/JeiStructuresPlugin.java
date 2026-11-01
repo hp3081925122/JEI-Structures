@@ -121,9 +121,11 @@ public final class JeiStructuresPlugin implements IModPlugin {
     }
 
     public static List<StructureRecipe> getSharedRecipes() {
+        long sharedStart = DebugRenderTiming.start();
         StructureIndexCache cache = StructureIndexCacheLoader.load();
         CachedRecipes snapshot = cachedRecipes;
         if (snapshot != null && snapshot.sourceCache == cache) {
+            DebugRenderTiming.end(DebugRenderTiming.Section.SHARED_RECIPES, sharedStart);
             return snapshot.recipes;
         }
         synchronized (JeiStructuresPlugin.class) {
@@ -136,11 +138,14 @@ public final class JeiStructuresPlugin implements IModPlugin {
     }
 
     private static List<StructureRecipe> buildRecipes(StructureIndexCache cache) {
+        long buildStart = DebugRenderTiming.start();
         List<StructureRecipe> recipes = new ArrayList<>();
         for (StructureIndexCache.StructureEntry entry : cache.structures) {
             recipes.add(new StructureRecipe(entry));
         }
-        return List.copyOf(recipes);
+        List<StructureRecipe> result = List.copyOf(recipes);
+        DebugRenderTiming.end(DebugRenderTiming.Section.BUILD_RECIPES, buildStart, "recipes=" + result.size());
+        return result;
     }
 
     private static List<StructureBiomeIcon> buildBiomeIngredients(StructureIndexCache cache) {
@@ -228,11 +233,14 @@ public final class JeiStructuresPlugin implements IModPlugin {
         }
 
         private List<StructureRecipe> getMatchedRecipes(ITypedIngredient<?> ingredient) {
+            long lookupStart = DebugRenderTiming.start();
             CachedLookup lookup = getLookup();
-            return ingredient.getItemStack()
+            List<StructureRecipe> result = ingredient.getItemStack()
                     .map(ItemStack::getItem)
                     .map(lookup.recipesByItem::get)
                     .orElse(null);
+            DebugRenderTiming.end(DebugRenderTiming.Section.LOOKUP, lookupStart);
+            return result;
         }
 
         private CachedLookup getLookup() {

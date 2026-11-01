@@ -5,6 +5,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public final class JeiStructuresConfig {
 
     public static final ModConfigSpec COMMON_SPEC;
+    private static final ModConfigSpec.BooleanValue DEBUG_RENDER_TIMING;
     private static final ModConfigSpec.BooleanValue SILENT_CAPTURE_TELEPORT;
     private static final ModConfigSpec.IntValue CAPTURE_CHUNK_LOAD_TIMEOUT_SECONDS;
     private static final ModConfigSpec.IntValue CAPTURE_MOB_WAIT_TICKS;
@@ -77,6 +78,14 @@ public final class JeiStructuresConfig {
                 )
                 .define("skipChunkGenerationMobs", true);
         builder.pop();
+        builder.push("debugRender");
+        DEBUG_RENDER_TIMING = builder
+                .comment(
+                        "Log render timing of the structure index page to the game log.",
+                        "在游戏日志中记录结构索引页面的渲染耗时。"
+                )
+                .define("debugRenderTiming", false);
+        builder.pop();
         COMMON_SPEC = builder.build();
     }
 
@@ -121,5 +130,9 @@ public final class JeiStructuresConfig {
 
     public static boolean captureSkipChunkGenerationMobs() {
         return CAPTURE_SKIP_CHUNK_GENERATION_MOBS.get();
+    }
+
+    public static boolean debugRenderTiming() {
+        return COMMON_SPEC.isLoaded() && DEBUG_RENDER_TIMING.get();
     }
 }
