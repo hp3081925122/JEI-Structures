@@ -52,7 +52,7 @@ public final class JeiStructuresConfig {
                         "Seconds a single structure locate may run before it is cancelled.",
                         "单个结构定位最长运行秒数，超时后取消。"
                 )
-                .defineInRange("locateTimeoutSeconds", 30, 5, 600);
+                .defineInRange("locateTimeoutSeconds", 120, 5, 600);
         CAPTURE_SKIP_LIGHTING = builder
                 .comment(
                         "Skip light propagation for chunks generated during capture. Chunks are saved as unlit and relit when loaded again.",
