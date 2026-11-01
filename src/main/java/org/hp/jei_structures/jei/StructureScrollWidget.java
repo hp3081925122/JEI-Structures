@@ -26,6 +26,7 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
     private static final int SCROLLBAR_EXTRA_WIDTH = 16;
     private static final int SCROLLBAR_WIDTH = 14;
     private static final int MIN_SCROLL_MARKER_HEIGHT = 14;
+    private static final int SLOT_SIZE = 18;
 
     private final StructureRecipe recipe;
     private final List<IRecipeSlotDrawable> contentSlots;
@@ -38,8 +39,8 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
     private final ImmutableRect2i scrollbarArea;
     private final DrawableNineSliceTexture scrollbarMarker;
     private final DrawableNineSliceTexture scrollbarBackground;
-    private final int contentHeight;
-    private final List<StructureRecipeCategory.SlotPlacement> slotPlacements;
+    private int contentHeight = -1;
+    private List<StructureRecipeCategory.SlotPlacement> slotPlacements;
     private double dragOriginY = -1.0D;
     private float scrollOffsetY = 0.0F;
 
@@ -56,8 +57,20 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         Textures textures = Internal.getTextures();
         this.scrollbarMarker = textures.getScrollbarMarker();
         this.scrollbarBackground = textures.getScrollbarBackground();
-        this.contentHeight = recipe.getTotalContentHeight();
-        this.slotPlacements = StructureRecipeCategory.getSlotPlacements(recipe);
+    }
+
+    private int getContentHeight() {
+        if (contentHeight < 0) {
+            contentHeight = recipe.getTotalContentHeight();
+        }
+        return contentHeight;
+    }
+
+    private List<StructureRecipeCategory.SlotPlacement> getSlotPlacements() {
+        if (slotPlacements == null) {
+            slotPlacements = StructureRecipeCategory.getSlotPlacements(recipe);
+        }
+        return slotPlacements;
     }
 
     @Override
@@ -72,6 +85,8 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
 
     @Override
     public void drawWidget(GuiGraphics guiGraphics, double mouseX, double mouseY) {
+        DebugRenderTiming.frame(recipe, contentSlots.size());
+        long widgetStart = DebugRenderTiming.start();
         StructureRecipeCategory.drawPanel(guiGraphics, 0, 0, width, height);
 
         scrollbarBackground.draw(guiGraphics, scrollbarArea);
@@ -83,10 +98,15 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         poseStack.pushPose();
         int scrollPixels = getScrollPixels();
         poseStack.translate(0.0D, -scrollPixels, 0.0D);
-        StructureRecipeCategory.drawScrollableContents(recipe, guiGraphics, 0, 0);
-        drawSlots(guiGraphics);
+        long contentsStart = DebugRenderTiming.start();
+        StructureRecipeCategory.drawScrollableContents(recipe, guiGraphics, 0, 0, scrollPixels, scrollPixels + height);
+        DebugRenderTiming.end(DebugRenderTiming.Section.CONTENTS, contentsStart);
+        long slotsStart = DebugRenderTiming.start();
+        drawSlots(guiGraphics, scrollPixels, scrollPixels + height);
+        DebugRenderTiming.end(DebugRenderTiming.Section.SLOTS, slotsStart);
         poseStack.popPose();
         guiGraphics.disableScissor();
+        DebugRenderTiming.end(DebugRenderTiming.Section.WIDGET, widgetStart);
 
     }
 
@@ -95,13 +115,15 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         if (!isMouseOverContent(mouseX, mouseY)) {
             return;
         }
+        long tooltipStart = DebugRenderTiming.start();
         double adjustedMouseY = mouseY + getScrollPixels();
         for (IRecipeSlotDrawable slot : contentSlots) {
             if (slot.isMouseOver(mouseX, adjustedMouseY)) {
                 slot.getTooltip(tooltip);
-                return;
+                break;
             }
         }
+        DebugRenderTiming.end(DebugRenderTiming.Section.TOOLTIP, tooltipStart);
     }
 
     @Override
@@ -143,7 +165,7 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
     @Override
     public boolean handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaY) {
         if (getHiddenAmount() > 0) {
-            float scrollAmount = (float) (scrollDeltaY * 18.0D / Math.max(contentHeight, 1));
+            float scrollAmount = (float) (scrollDeltaY * 18.0D / Math.max(getContentHeight(), 1));
             scrollOffsetY = Mth.clamp(scrollOffsetY - scrollAmount, 0.0F, 1.0F);
             return true;
         }
@@ -162,13 +184,16 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         return true;
     }
 
-    private void drawSlots(GuiGraphics guiGraphics) {
-        int slotCount = Math.min(contentSlots.size(), slotPlacements.size());
+    private void drawSlots(GuiGraphics guiGraphics, int visibleTop, int visibleBottom) {
+        List<StructureRecipeCategory.SlotPlacement> placements = getSlotPlacements();
+        int slotCount = Math.min(contentSlots.size(), placements.size());
         for (int index = 0; index < slotCount; index++) {
             IRecipeSlotDrawable slot = contentSlots.get(index);
-            StructureRecipeCategory.SlotPlacement placement = slotPlacements.get(index);
+            StructureRecipeCategory.SlotPlacement placement = placements.get(index);
             slot.setPosition(placement.x(), placement.y());
-            slot.draw(guiGraphics);
+            if (placement.y() + SLOT_SIZE >= visibleTop && placement.y() <= visibleBottom) {
+                slot.draw(guiGraphics);
+            }
         }
     }
 
@@ -189,7 +214,7 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
     }
 
     private int getHiddenAmount() {
-        return Math.max(contentHeight - height, 0);
+        return Math.max(getContentHeight() - height, 0);
     }
 
     private int getScrollPixels() {

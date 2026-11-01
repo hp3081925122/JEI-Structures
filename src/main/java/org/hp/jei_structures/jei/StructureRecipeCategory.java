@@ -84,6 +84,7 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
+        long setRecipeStart = DebugRenderTiming.start();
 
         for (StructureRecipe.ContentBlock block : recipe.getContentBlocks()) {
             for (StructureRecipe.SlotDisplay slot : block.slots()) {
@@ -112,26 +113,32 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         if (!lookupOutputs.isEmpty()) {
             builder.addInvisibleIngredients(RecipeIngredientRole.OUTPUT).addItemStacks(lookupOutputs);
         }
-
+        DebugRenderTiming.end(DebugRenderTiming.Section.SET_RECIPE, setRecipeStart, recipe.getStructureId() + " lookupInputs=" + lookupInputs.size());
     }
 
     @Override
     public void draw(StructureRecipe recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
+        long headerStart = DebugRenderTiming.start();
         drawFixedHeader(recipe, guiGraphics, CONTENT_X, getContentY(recipe));
+        DebugRenderTiming.end(DebugRenderTiming.Section.HEADER, headerStart);
     }
 
     @Override
     public void createRecipeExtras(mezz.jei.api.gui.widgets.IRecipeExtrasBuilder builder, StructureRecipe recipe, IFocusGroup focuses) {
-
+        long extrasStart = DebugRenderTiming.start();
         List<IRecipeSlotDrawable> contentSlots = builder.getRecipeSlots().getSlots();
         int contentY = getContentY(recipe);
         StructureScrollWidget widget = new StructureScrollWidget(recipe, CONTENT_X, contentY, CONTENT_WIDTH, getHeight() - contentY, contentSlots);
         builder.addSlottedWidget(widget, contentSlots);
         builder.addInputHandler(widget);
-
+        DebugRenderTiming.end(DebugRenderTiming.Section.CREATE_EXTRAS, extrasStart, recipe.getStructureId() + " slots=" + contentSlots.size());
     }
 
     static void drawScrollableContents(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y) {
+        drawScrollableContents(recipe, guiGraphics, x, y, Integer.MIN_VALUE, Integer.MAX_VALUE);
+    }
+
+    static void drawScrollableContents(StructureRecipe recipe, GuiGraphics guiGraphics, int x, int y, int visibleTop, int visibleBottom) {
         Font font = Minecraft.getInstance().font;
         int currentY = y + CONTENT_PADDING_Y;
         int mergedCardX = x + getCardLeftInset();
@@ -144,7 +151,11 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
         currentY = mergedCardY;
         for (int index = 0; index < blocks.size(); index++) {
             StructureRecipe.ContentBlock block = blocks.get(index);
-            int blockHeight = block.getHeight(recipe) - block.getTrailingSpacing(recipe);
+            int fullBlockHeight = block.getHeight(recipe);
+            if (currentY + fullBlockHeight < visibleTop || currentY > visibleBottom) {
+                currentY += fullBlockHeight;
+                continue;
+            }
             int blockY = currentY + block.getTitleStartY(recipe);
             if (block.hasTitle()) {
                 int titleColor = getTitleColor(block);
@@ -163,14 +174,16 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             int groupIndex = 0;
             for (List<Component> wrappedGroup : block.getWrappedLineGroups(recipe)) {
                 for (Component wrappedLine : wrappedGroup) {
-                    int textColor = getTextColor(block, groupIndex);
-                    guiGraphics.drawString(font, wrappedLine, x + getCardContentInsetX(), blockY, resolveTextColor(wrappedLine, textColor), false);
+                    if (blockY + recipe.getTextLineHeight() >= visibleTop && blockY <= visibleBottom) {
+                        int textColor = getTextColor(block, groupIndex);
+                        guiGraphics.drawString(font, wrappedLine, x + getCardContentInsetX(), blockY, resolveTextColor(wrappedLine, textColor), false);
+                    }
                     blockY += recipe.getTextLineHeight();
                 }
                 blockY += block.getExtraLineGapAfter(groupIndex);
                 groupIndex++;
             }
-            currentY += block.getHeight(recipe);
+            currentY += fullBlockHeight;
         }
 
     }
@@ -216,11 +229,13 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     static List<FormattedCharSequence> getTitleLines(StructureRecipe recipe) {
-        List<FormattedCharSequence> lines = Minecraft.getInstance().font.split(recipe.getDisplayName(), TITLE_WRAP_WIDTH);
-        if (lines.isEmpty()) {
-            return List.of(FormattedCharSequence.EMPTY);
-        }
-        return lines.size() > TITLE_MAX_LINES ? lines.subList(0, TITLE_MAX_LINES) : lines;
+        return recipe.getCachedTitleLines(() -> {
+            List<FormattedCharSequence> lines = Minecraft.getInstance().font.split(recipe.getDisplayName(), TITLE_WRAP_WIDTH);
+            if (lines.isEmpty()) {
+                return List.of(FormattedCharSequence.EMPTY);
+            }
+            return lines.size() > TITLE_MAX_LINES ? lines.subList(0, TITLE_MAX_LINES) : lines;
+        });
     }
 
     static int getContentY(StructureRecipe recipe) {

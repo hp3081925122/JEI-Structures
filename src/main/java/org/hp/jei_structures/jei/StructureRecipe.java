@@ -2,8 +2,11 @@ package org.hp.jei_structures.jei;
 
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -14,12 +17,15 @@ import org.hp.jei_structures.data.ItemStackDisplay;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 public final class StructureRecipe {
 
@@ -54,26 +60,76 @@ public final class StructureRecipe {
     private static final int TOTAL_CONTENT_BOTTOM_GAP = 8;
     private static final int SLOT_SPACING = 18;
     private static final int GRID_COLUMNS = 6;
+    private static Map<net.minecraft.world.entity.EntityType<?>, Item> spawnEggsByType;
 
     private final ResourceLocation id;
     private final StructureIndexCache.StructureEntry entry;
     private final Component displayName;
     private final List<ContentBlock> contentBlocks;
-    private final Map<String, List<Component>> slotTooltips;
+    private final Map<String, Supplier<List<Component>>> slotTooltips;
+    private final Map<String, List<Component>> resolvedSlotTooltips = new ConcurrentHashMap<>();
     private final ItemStack iconStack;
     private final List<ItemStack> lookupInputs;
     private final List<ItemStack> lookupOutputs;
+    private final Map<ContentBlock, BlockLayout> blockLayouts = new IdentityHashMap<>();
+    private String layoutKey = "";
+    private int mergedContentHeight = -1;
+    private List<FormattedCharSequence> titleLines;
 
     public StructureRecipe(StructureIndexCache.StructureEntry entry) {
+        long copyStart = DebugRenderTiming.start();
         this.entry = copyEntry(entry);
+        DebugRenderTiming.end(DebugRenderTiming.Section.RECIPE_COPY, copyStart);
+        long nameStart = DebugRenderTiming.start();
         this.id = ResourceLocation.fromNamespaceAndPath(JeiStructures.MODID, sanitize(this.entry.structureId));
         this.displayName = StructureTextHelper.getStructureComponent(this.entry.structureId);
-        LinkedHashMap<String, List<Component>> tooltipMap = new LinkedHashMap<>();
+        DebugRenderTiming.end(DebugRenderTiming.Section.RECIPE_NAME, nameStart);
+        LinkedHashMap<String, Supplier<List<Component>>> tooltipMap = new LinkedHashMap<>();
         this.contentBlocks = List.copyOf(buildContentBlocks(tooltipMap));
         this.slotTooltips = Map.copyOf(tooltipMap);
+        long lookupStart = DebugRenderTiming.start();
         this.iconStack = resolveIconStack();
         this.lookupInputs = buildLookupInputs();
         this.lookupOutputs = List.copyOf(lookupInputs);
+        DebugRenderTiming.end(DebugRenderTiming.Section.RECIPE_LOOKUP, lookupStart);
+    }
+
+    synchronized BlockLayout getBlockLayout(ContentBlock block) {
+        validateLayoutCache();
+        BlockLayout layout = blockLayouts.get(block);
+        if (layout == null) {
+            int wrapWidth = getWrapWidth();
+            List<Component> wrappedTitle = List.copyOf(wrapLines(block.title(), wrapWidth));
+            List<List<Component>> wrappedGroups = new ArrayList<>(block.lines().size());
+            int wrappedLineCount = 0;
+            for (Component line : block.lines()) {
+                List<Component> wrapped = List.copyOf(wrapLines(line, wrapWidth));
+                wrappedGroups.add(wrapped);
+                wrappedLineCount += wrapped.size();
+            }
+            layout = new BlockLayout(wrappedTitle, List.copyOf(wrappedGroups), wrappedLineCount);
+            blockLayouts.put(block, layout);
+        }
+        return layout;
+    }
+
+    synchronized List<FormattedCharSequence> getCachedTitleLines(Supplier<List<FormattedCharSequence>> builder) {
+        validateLayoutCache();
+        if (titleLines == null) {
+            titleLines = List.copyOf(builder.get());
+        }
+        return titleLines;
+    }
+
+    private void validateLayoutCache() {
+        Minecraft minecraft = Minecraft.getInstance();
+        String key = minecraft.getLanguageManager().getSelected() + '|' + minecraft.options.forceUnicodeFont().get();
+        if (!key.equals(layoutKey)) {
+            blockLayouts.clear();
+            mergedContentHeight = -1;
+            titleLines = null;
+            layoutKey = key;
+        }
     }
 
     public ResourceLocation getId() {
@@ -113,7 +169,11 @@ public final class StructureRecipe {
         if (slotName == null || slotName.isBlank()) {
             return List.of();
         }
-        return slotTooltips.getOrDefault(slotName, List.of());
+        Supplier<List<Component>> supplier = slotTooltips.get(slotName);
+        if (supplier == null) {
+            return List.of();
+        }
+        return resolvedSlotTooltips.computeIfAbsent(slotName, ignored -> List.copyOf(supplier.get()));
     }
 
     public int getTitleHeight() {
@@ -244,15 +304,21 @@ public final class StructureRecipe {
         return StructureRecipeCategory.getHeaderContentOffset(this) + getMergedContentHeight() + TOTAL_CONTENT_BOTTOM_GAP;
     }
 
-    public int getMergedContentHeight() {
+    public synchronized int getMergedContentHeight() {
+        validateLayoutCache();
+        if (mergedContentHeight >= 0) {
+            return mergedContentHeight;
+        }
         if (contentBlocks.isEmpty()) {
+            mergedContentHeight = 0;
             return 0;
         }
         int height = 0;
         for (ContentBlock block : contentBlocks) {
             height += block.getHeight(this);
         }
-        return Math.max(height - contentBlocks.get(contentBlocks.size() - 1).getTrailingSpacing(this), 0);
+        mergedContentHeight = Math.max(height - contentBlocks.get(contentBlocks.size() - 1).getTrailingSpacing(this), 0);
+        return mergedContentHeight;
     }
 
     private static List<ItemStack> copyStacks(List<ItemStack> stacks) {
@@ -493,17 +559,27 @@ public final class StructureRecipe {
         return Map.copyOf(copies);
     }
 
-    private List<ContentBlock> buildContentBlocks(Map<String, List<Component>> tooltipMap) {
+    private List<ContentBlock> buildContentBlocks(Map<String, Supplier<List<Component>>> tooltipMap) {
         List<ContentBlock> blocks = new ArrayList<>();
         int[] slotCounter = new int[]{0};
 
+        long generationStart = DebugRenderTiming.start();
         addGenerationInfoBlock(blocks, tooltipMap, slotCounter);
+        DebugRenderTiming.end(DebugRenderTiming.Section.RECIPE_GENERATION, generationStart);
+        long specialStart = DebugRenderTiming.start();
         addSpecialInfoBlock(blocks, tooltipMap, slotCounter);
         addSpecialBlocksBlock(blocks, slotCounter);
+        DebugRenderTiming.end(DebugRenderTiming.Section.RECIPE_SPECIAL, specialStart);
+        long entitiesStart = DebugRenderTiming.start();
         addStructureEntitiesBlock(blocks, slotCounter);
         addEntityLootBlock(blocks, slotCounter);
+        DebugRenderTiming.end(DebugRenderTiming.Section.RECIPE_ENTITIES, entitiesStart);
+        long storedStart = DebugRenderTiming.start();
         addStoredItemsBlocks(blocks, tooltipMap, slotCounter);
+        DebugRenderTiming.end(DebugRenderTiming.Section.RECIPE_STORED, storedStart);
+        long lootStart = DebugRenderTiming.start();
         addBlockLootBlocks(blocks, tooltipMap, slotCounter);
+        DebugRenderTiming.end(DebugRenderTiming.Section.RECIPE_LOOT, lootStart);
 
         if (blocks.isEmpty()) {
             blocks.add(ContentBlock.textOnly(
@@ -513,7 +589,7 @@ public final class StructureRecipe {
         return blocks;
     }
 
-    private void addGenerationInfoBlock(List<ContentBlock> blocks, Map<String, List<Component>> tooltipMap, int[] slotCounter) {
+    private void addGenerationInfoBlock(List<ContentBlock> blocks, Map<String, Supplier<List<Component>>> tooltipMap, int[] slotCounter) {
         List<Component> lines = new ArrayList<>();
         lines.add(Component.translatable(
                 "jei_structures.generation_info.structure_type",
@@ -550,9 +626,10 @@ public final class StructureRecipe {
         for (GenerationBiomeDisplay display : buildGenerationBiomeDisplays()) {
             String slotName = nextSlotName("generation_biome", slotCounter);
             slots.add(SlotDisplay.biome(display.icon(), slotName));
-            tooltipMap.put(slotName, List.of(
+            List<Component> biomeTooltip = List.of(
                     Component.translatable("jei_structures.tooltip.biome_source", StructureTextHelper.joinRawValues(display.sourceSelectors(), 4)).withStyle(ChatFormatting.GRAY)
-            ));
+            );
+            tooltipMap.put(slotName, () -> biomeTooltip);
         }
 
         blocks.add(ContentBlock.leadCombinedGroup(
@@ -633,7 +710,7 @@ public final class StructureRecipe {
         return displays;
     }
 
-    private void addSpecialInfoBlock(List<ContentBlock> blocks, Map<String, List<Component>> tooltipMap, int[] slotCounter) {
+    private void addSpecialInfoBlock(List<ContentBlock> blocks, Map<String, Supplier<List<Component>>> tooltipMap, int[] slotCounter) {
         List<SpecialInfoDisplay> displays = buildSpecialInfoDisplays();
         if (displays.isEmpty()) {
             return;
@@ -642,7 +719,8 @@ public final class StructureRecipe {
         for (SpecialInfoDisplay display : displays) {
             String slotName = nextSlotName("special_info", slotCounter);
             slots.add(SlotDisplay.item(RecipeIngredientRole.INPUT, display.stack(), slotName));
-            tooltipMap.put(slotName, buildSpecialInfoTooltip(display));
+            List<Component> specialTooltip = buildSpecialInfoTooltip(display);
+            tooltipMap.put(slotName, () -> specialTooltip);
         }
         blocks.add(ContentBlock.leadCombinedGroup(
                 StructureTextHelper.component("jei_structures.section.special_info"),
@@ -687,7 +765,7 @@ public final class StructureRecipe {
         ));
     }
 
-    private void addStoredItemsBlocks(List<ContentBlock> blocks, Map<String, List<Component>> tooltipMap, int[] slotCounter) {
+    private void addStoredItemsBlocks(List<ContentBlock> blocks, Map<String, Supplier<List<Component>>> tooltipMap, int[] slotCounter) {
         List<StoredItemsGroup> groups = buildStoredItemGroups();
         boolean first = true;
         for (StoredItemsGroup group : groups) {
@@ -704,7 +782,8 @@ public final class StructureRecipe {
                 if (item.tagSnbt == null && ItemStackDisplay.requiresVariantData(item.itemId)) {
                     tooltip.add(Component.translatable("jei_structures.tooltip.missing_variant_data").withStyle(ChatFormatting.GRAY));
                 }
-                tooltipMap.put(slotName, List.copyOf(tooltip));
+                List<Component> storedTooltip = List.copyOf(tooltip);
+                tooltipMap.put(slotName, () -> storedTooltip);
             }
             if (slots.isEmpty()) {
                 continue;
@@ -723,8 +802,10 @@ public final class StructureRecipe {
         }
     }
 
-    private void addBlockLootBlocks(List<ContentBlock> blocks, Map<String, List<Component>> tooltipMap, int[] slotCounter) {
+    private void addBlockLootBlocks(List<ContentBlock> blocks, Map<String, Supplier<List<Component>>> tooltipMap, int[] slotCounter) {
+        long groupsStart = DebugRenderTiming.start();
         List<BlockLootGroup> groups = buildBlockLootGroups();
+        DebugRenderTiming.end(DebugRenderTiming.Section.LOOT_GROUPS, groupsStart);
         boolean first = true;
         for (BlockLootGroup group : groups) {
             for (StructureIndexCache.LootTableDetail detail : group.lootTables()) {
@@ -733,14 +814,21 @@ public final class StructureRecipe {
                 }
                 List<SlotDisplay> slots = new ArrayList<>();
                 for (StructureIndexCache.LootItemEntry entry : detail.entries) {
+                    long stackStart = DebugRenderTiming.start();
                     List<String> functions = getItemFunctions(entry);
                     ItemStack stack = ItemStackDisplay.create(entry.itemId, entry.tagSnbt, functions);
+                    DebugRenderTiming.end(DebugRenderTiming.Section.LOOT_STACK, stackStart);
                     if (stack.isEmpty()) {
                         continue;
                     }
+                    long slotStart = DebugRenderTiming.start();
                     String slotName = nextSlotName("block_loot", slotCounter);
                     slots.add(SlotDisplay.item(RecipeIngredientRole.OUTPUT, stack, slotName));
-                    tooltipMap.put(slotName, buildLootTooltip(group.blockId(), detail, entry));
+                    DebugRenderTiming.end(DebugRenderTiming.Section.LOOT_SLOT, slotStart);
+                    long tooltipStart = DebugRenderTiming.start();
+                    String blockId = group.blockId();
+                    tooltipMap.put(slotName, () -> buildLootTooltip(blockId, detail, entry));
+                    DebugRenderTiming.end(DebugRenderTiming.Section.LOOT_TOOLTIP, tooltipStart);
                 }
                 if (slots.isEmpty()) {
                     continue;
@@ -1101,12 +1189,21 @@ public final class StructureRecipe {
     }
 
     private static ItemStack findEgg(net.minecraft.world.entity.EntityType<?> entityType) {
-        for (Item item : ForgeRegistries.ITEMS.getValues()) {
-            if (item instanceof net.minecraft.world.item.SpawnEggItem spawnEggItem && spawnEggItem.getType(null) == entityType) {
-                return new ItemStack(item);
+        Item item = getSpawnEggsByType().get(entityType);
+        return item != null ? new ItemStack(item) : ItemStack.EMPTY;
+    }
+
+    private static synchronized Map<net.minecraft.world.entity.EntityType<?>, Item> getSpawnEggsByType() {
+        if (spawnEggsByType == null) {
+            Map<net.minecraft.world.entity.EntityType<?>, Item> eggs = new IdentityHashMap<>();
+            for (Item item : ForgeRegistries.ITEMS.getValues()) {
+                if (item instanceof net.minecraft.world.item.SpawnEggItem spawnEggItem) {
+                    eggs.putIfAbsent(spawnEggItem.getType(null), item);
+                }
             }
+            spawnEggsByType = eggs;
         }
-        return ItemStack.EMPTY;
+        return spawnEggsByType;
     }
 
     private static String sanitize(String value) {
@@ -1172,7 +1269,7 @@ public final class StructureRecipe {
         }
 
         public List<Component> getWrappedTitle(StructureRecipe recipe) {
-            return wrapLines(title, recipe.getWrapWidth());
+            return recipe.getBlockLayout(this).wrappedTitle();
         }
 
         public int getWrappedTitleLineCount(StructureRecipe recipe) {
@@ -1180,7 +1277,7 @@ public final class StructureRecipe {
         }
 
         public int getWrappedLineCount(StructureRecipe recipe) {
-            return getWrappedLines(recipe).size();
+            return recipe.getBlockLayout(this).wrappedLineCount();
         }
 
         public List<Component> getWrappedLines(StructureRecipe recipe) {
@@ -1192,11 +1289,7 @@ public final class StructureRecipe {
         }
 
         public List<List<Component>> getWrappedLineGroups(StructureRecipe recipe) {
-            List<List<Component>> wrappedGroups = new ArrayList<>();
-            for (Component line : lines) {
-                wrappedGroups.add(wrapLines(line, recipe.getWrapWidth()));
-            }
-            return wrappedGroups;
+            return recipe.getBlockLayout(this).wrappedLineGroups();
         }
 
         public int getTextStartY(StructureRecipe recipe) {
@@ -1382,6 +1475,9 @@ public final class StructureRecipe {
         TAIL
     }
 
+    record BlockLayout(List<Component> wrappedTitle, List<List<Component>> wrappedLineGroups, int wrappedLineCount) {
+    }
+
     private record SpecialInfoDisplay(String targetType, String targetId, String translationKey, ItemStack stack) {
     }
 
@@ -1422,22 +1518,17 @@ public final class StructureRecipe {
     }
 
     private static int findPixelBreakIndex(String text, int wrapWidth) {
-        var font = net.minecraft.client.Minecraft.getInstance().font;
+        var font = Minecraft.getInstance().font;
         if (font.width(text) <= wrapWidth) {
             return text.length();
         }
-        int bestBreak = Math.min(text.length(), 1);
-        for (int index = 1; index <= text.length(); index++) {
-            String part = text.substring(0, index);
-            if (font.width(part) > wrapWidth) {
-                break;
-            }
-            bestBreak = index;
-            char current = text.charAt(index - 1);
-            if (Character.isWhitespace(current) || current == '：' || current == '，' || current == '、' || current == '|' || current == '）') {
-                bestBreak = index;
-            }
+        int index = Math.max(0, Math.min(font.getSplitter().plainIndexAtWidth(text, wrapWidth, Style.EMPTY), text.length()));
+        while (index > 1 && font.width(text.substring(0, index)) > wrapWidth) {
+            index--;
         }
-        return Math.max(bestBreak, 1);
+        while (index < text.length() && font.width(text.substring(0, index + 1)) <= wrapWidth) {
+            index++;
+        }
+        return Math.max(index, 1);
     }
 }
