@@ -898,6 +898,9 @@ public final class DebugStructureCaptureManager {
                     result = level.getChunkSource()
                             .getGenerator()
                             .findNearestMapStructure(level, structures, locateOrigin, DEFAULT_LOCATE_RADIUS, false);
+                    if (result != null && result.getFirst() != null) {
+                        resolveLocatedStart(level, target, result.getFirst().immutable(), token);
+                    }
                 } catch (DebugLocateControl.LocateCancelledException exception) {
                     return;
                 } catch (RuntimeException exception) {
@@ -1004,7 +1007,7 @@ public final class DebugStructureCaptureManager {
             }
             LocatedStructure locatedStructure = simulatedStart != null && simulatedStart.isValid()
                     ? buildLocatedStructure(level, simulatedStart)
-                    : buildLocatedStructureFromLocateCommand(level, target, result.getFirst().immutable());
+                    : null;
             if (locatedStructure == null) {
                 markDimensionLocateFailure(target, level.dimension());
                 sendDimensionLocateProgress(server);
@@ -1081,11 +1084,12 @@ public final class DebugStructureCaptureManager {
             return base;
         }
 
-        private LocatedStructure buildLocatedStructureFromLocateCommand(ServerLevel level, StructureTarget target, BlockPos locatePos) {
-            if (level == null || target == null || locatePos == null) {
-                return null;
-            }
+        private static void resolveLocatedStart(ServerLevel level, StructureTarget target, BlockPos locatePos, DebugLocateControl.LocateToken token) {
             ChunkPos chunkPos = ChunkPos.containing(locatePos);
+            if (token.simulatedStart(chunkPos) != null) {
+                return;
+            }
+            long resolveStart = System.currentTimeMillis();
             StructureStart structureStart = level.structureManager().getStartForStructure(
                     SectionPos.of(locatePos),
                     target.structure(),
@@ -1094,10 +1098,11 @@ public final class DebugStructureCaptureManager {
             if (structureStart == null || !structureStart.isValid()) {
                 structureStart = level.structureManager().getStructureWithPieceAt(locatePos, target.structure());
             }
-            if (structureStart == null || !structureStart.isValid()) {
-                return null;
+            boolean resolved = structureStart != null && structureStart.isValid();
+            if (resolved) {
+                DebugLocateControl.recordResolvedStart(chunkPos.pack(), structureStart);
             }
-            return buildLocatedStructure(level, structureStart);
+            JeiStructures.LOGGER.info("[JEI_DEBUG] locate {} resolved start off main thread resolved={} ms={}", target.structureId(), resolved, System.currentTimeMillis() - resolveStart);
         }
 
         private LocatedStructure buildLocatedStructure(ServerLevel level, StructureStart structureStart) {

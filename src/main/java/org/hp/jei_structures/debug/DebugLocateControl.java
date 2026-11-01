@@ -52,6 +52,13 @@ public final class DebugLocateControl {
         }
     }
 
+    public static void recordResolvedStart(long chunkKey, StructureStart start) {
+        LocateToken token = CURRENT.get();
+        if (token != null) {
+            token.simulatedStarts.put(chunkKey, start);
+        }
+    }
+
     public static void recordCandidate() {
         LocateToken token = CURRENT.get();
         if (token != null) {
