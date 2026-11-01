@@ -238,6 +238,7 @@ public final class DebugStructureCaptureManager {
         private final Deque<PrelocatedTarget> locatedCaptureQueue = new ArrayDeque<>();
         private final Deque<StructureTarget> locateRetryQueue = new ArrayDeque<>();
         private final Set<String> retriedLocateIds = new HashSet<>();
+        private final Set<String> chunkTimeoutRetriedIds = new HashSet<>();
         private final TimingStats timingStats = new TimingStats();
         private final LootTableItemResolver lootResolver;
         private final ExecutorService locateExecutor;
@@ -578,16 +579,29 @@ public final class DebugStructureCaptureManager {
                     }
                     return false;
                 }
-                JeiStructures.LOGGER.warn(
-                        "Structure debug chunk loading timed out, loading remaining chunks synchronously: structure={}, ready={}/{}",
-                        currentTarget.structureId(),
-                        currentAttempt.loadedChunkCount,
-                        totalChunks
-                );
-                for (ChunkPos chunkPos : currentAttempt.placeChunks) {
-                    level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.FULL, true);
+                String structureId = currentTarget.structureId().toString();
+                if (chunkTimeoutRetriedIds.add(structureId)) {
+                    JeiStructures.LOGGER.warn(
+                            "Structure debug chunk loading timed out, moving to end of queue: structure={}, ready={}/{}",
+                            currentTarget.structureId(),
+                            currentAttempt.loadedChunkCount,
+                            totalChunks
+                    );
+                    locatedCaptureQueue.addLast(currentPrelocated);
+                } else {
+                    JeiStructures.LOGGER.warn(
+                            "Structure debug chunk loading timed out again, skipping structure: structure={}, ready={}/{}",
+                            currentTarget.structureId(),
+                            currentAttempt.loadedChunkCount,
+                            totalChunks
+                    );
+                    releaseCaptureTickets(currentPrelocated);
+                    recordFailure("load_chunks", "chunk_load_timeout");
+                    currentDimensionCaptureCompleted++;
                 }
-                currentAttempt.loadedChunkCount = totalChunks;
+                currentPrelocated = null;
+                enterPhase(Phase.PREPARE_CAPTURE);
+                return false;
             }
             JeiStructures.LOGGER.info("[JEI_DEBUG] chunks {} waitMs={} chunks={}", currentTarget.structureId(), System.currentTimeMillis() - currentStructureStartMillis, totalChunks);
             if (requeueIfStructureMismatch(level)) {

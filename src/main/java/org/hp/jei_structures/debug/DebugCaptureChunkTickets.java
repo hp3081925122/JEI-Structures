@@ -32,6 +32,7 @@ import java.util.function.Function;
 public final class DebugCaptureChunkTickets {
 
     public static final TicketType<ChunkPos> CAPTURE_TICKET = TicketType.create("jei_structures_capture", Comparator.comparingLong(ChunkPos::toLong));
+    private static volatile long lastHasChunkDeniedLogMillis;
     public static final TicketType<ChunkPos> PLAYER_HOLD_TICKET = TicketType.create("jei_structures_player_hold", Comparator.comparingLong(ChunkPos::toLong));
     public static final TicketType<ChunkPos> LOCATE_TICKET = TicketType.create("jei_structures_locate", Comparator.comparingLong(ChunkPos::toLong), 1200);
     private static final long LOCATE_CHUNK_POLL_MILLIS = 50L;
@@ -92,6 +93,15 @@ public final class DebugCaptureChunkTickets {
     public static boolean isFeatureSkippedChunk(ServerLevel level, ChunkPos chunkPos) {
         Set<Long> skipped = FEATURE_SKIPPED_CHUNKS.get(level.dimension());
         return skipped != null && skipped.contains(chunkPos.toLong());
+    }
+
+    public static void logOffThreadHasChunkDenied(int x, int z) {
+        long now = System.currentTimeMillis();
+        if (now - lastHasChunkDeniedLogMillis < 1000L) {
+            return;
+        }
+        lastHasChunkDeniedLogMillis = now;
+        JeiStructures.LOGGER.info("[JEI_DEBUG] off-thread hasChunk denied for unfinished chunk=[{}, {}] thread={}", x, z, Thread.currentThread().getName());
     }
 
     public static void logMainThreadSyncLoad(ServerChunkCache chunkSource, int x, int z, ChunkStatus status, boolean requireChunk) {
