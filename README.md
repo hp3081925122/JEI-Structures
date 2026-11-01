@@ -1,5 +1,10 @@
 # JEI Structures
 
+> [!WARNING]
+> 1.19.2 Forge 版本已停止更新，不再修复问题或添加新功能。新功能请使用 1.20.1 Forge、1.21.1 NeoForge 或 26.1.2 NeoForge 版本。
+>
+> The 1.19.2 Forge version is no longer maintained and will not receive bug fixes or new features. Please use the 1.20.1 Forge, 1.21.1 NeoForge, or 26.1.2 NeoForge version for new features.
+
 `/jei_structures export` 能搜集并提供一定信息，普通玩家用这个就行，但是无法搜集硬编码相关生物、战利品信息。
 
 `/jei_structures export` can collect and provide a certain amount of information. This is enough for normal players, but it cannot collect hardcoded mob and loot information.
