@@ -19,7 +19,9 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.core.HolderSet;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -125,7 +127,22 @@ public final class StructureIndexExporter {
                         .filter(structureId -> !bindingData.getExportStructureToMobs().containsKey(structureId))
                         .count()
         );
-        JeiStructures.LOGGER.info("Compacted structure loot table details. Unique tables: {}", cache.lootTableDetails.size());
+        long specialBlockStructureCount = entries.stream()
+                .filter(entry -> entry.specialDisplayBlocks != null && !entry.specialDisplayBlocks.isEmpty())
+                .count();
+        long containerCount = entries.stream()
+                .mapToLong(entry -> entry.containers != null ? entry.containers.size() : 0L)
+                .sum();
+        long spawnerCount = entries.stream()
+                .mapToLong(entry -> entry.spawners != null ? entry.spawners.size() : 0L)
+                .sum();
+        JeiStructures.LOGGER.info(
+                "Compacted structure loot table details. Unique tables: {}, structures with special blocks: {}, total containers: {}, total spawners: {}",
+                cache.lootTableDetails.size(),
+                specialBlockStructureCount,
+                containerCount,
+                spawnerCount
+        );
 
         Path path = StructureIndexPaths.getBinaryCachePath();
         Files.createDirectories(path.getParent());
@@ -1178,8 +1195,17 @@ public final class StructureIndexExporter {
     }
 
     private static CompoundTag readTemplateRoot(ResourceManager resourceManager, Identifier templateId) {
-        Optional<Resource> resource = resourceManager.getResource(toTemplateLocation(templateId));
+        Identifier primaryLocation = toTemplateLocation(templateId);
+        Optional<Resource> resource = resourceManager.getResource(primaryLocation);
         if (resource.isEmpty()) {
+            Identifier legacyLocation = toLegacyTemplateLocation(templateId);
+            resource = resourceManager.getResource(legacyLocation);
+            if (resource.isPresent()) {
+                JeiStructures.LOGGER.debug("Loaded structure template from legacy plural path: {} -> {}", templateId, legacyLocation);
+            }
+        }
+        if (resource.isEmpty()) {
+            JeiStructures.LOGGER.debug("Structure template resource not found at {} (or legacy structures/ path)", primaryLocation);
             return null;
         }
         try (InputStream inputStream = resource.get().open()) {
@@ -1372,6 +1398,10 @@ public final class StructureIndexExporter {
     }
 
     private static Identifier toTemplateLocation(Identifier id) {
+        return Identifier.fromNamespaceAndPath(id.getNamespace(), "structure/" + id.getPath() + ".nbt");
+    }
+
+    private static Identifier toLegacyTemplateLocation(Identifier id) {
         return Identifier.fromNamespaceAndPath(id.getNamespace(), "structures/" + id.getPath() + ".nbt");
     }
 
@@ -1411,9 +1441,12 @@ public final class StructureIndexExporter {
 
     private static final class StructureCodeAnalyzer {
         private static final String ENTITY_TYPE_OWNER = EntityType.class.getName().replace('.', '/');
-        private static final String MOB_SPAWN_TYPE_OWNER = "net/minecraft/world/entity/MobSpawnType";
+        private static final String ENTITY_TYPES_OWNER = EntityTypes.class.getName().replace('.', '/');
+        private static final String ENTITY_SPAWN_REASON_OWNER = EntitySpawnReason.class.getName().replace('.', '/');
+        private static final String LEGACY_MOB_SPAWN_TYPE_OWNER = "net/minecraft/world/entity/MobSpawnType";
         private static final String TEMPLATE_PIECE_OWNER = "net/minecraft/world/level/levelgen/structure/TemplateStructurePiece";
         private static final String STRUCTURE_PIECE_OWNER = "net/minecraft/world/level/levelgen/structure/StructurePiece";
+        private static final String SCATTERED_FEATURE_PIECE_OWNER = "net/minecraft/world/level/levelgen/structure/ScatteredFeaturePiece";
 
         private StructureCodeAnalyzer() {
         }
@@ -1452,6 +1485,9 @@ public final class StructureIndexExporter {
                     }
                 }
             }
+            if (!entityIds.isEmpty()) {
+                JeiStructures.LOGGER.debug("Detected code-spawned entities for structure class {}: {}", structureClass.getName(), entityIds);
+            }
             return entityIds;
         }
 
@@ -1465,7 +1501,9 @@ public final class StructureIndexExporter {
                 reader.accept(new ClassVisitor(Opcodes.ASM9) {
                     @Override
                     public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
-                        result.structurePieceLike = TEMPLATE_PIECE_OWNER.equals(superName) || STRUCTURE_PIECE_OWNER.equals(superName);
+                        result.structurePieceLike = TEMPLATE_PIECE_OWNER.equals(superName)
+                                || STRUCTURE_PIECE_OWNER.equals(superName)
+                                || SCATTERED_FEATURE_PIECE_OWNER.equals(superName);
                     }
 
                     @Override
@@ -1478,10 +1516,11 @@ public final class StructureIndexExporter {
                         return new MethodVisitor(Opcodes.ASM9) {
                             @Override
                             public void visitFieldInsn(int opcode, String owner, String fieldName, String fieldDescriptor) {
-                                if (ENTITY_TYPE_OWNER.equals(owner) && ("L" + ENTITY_TYPE_OWNER + ";").equals(fieldDescriptor)) {
+                                if ((ENTITY_TYPES_OWNER.equals(owner) || ENTITY_TYPE_OWNER.equals(owner))
+                                        && ("L" + ENTITY_TYPE_OWNER + ";").equals(fieldDescriptor)) {
                                     result.entityTypeFieldNames.add(fieldName);
                                 }
-                                if (MOB_SPAWN_TYPE_OWNER.equals(owner)) {
+                                if (ENTITY_SPAWN_REASON_OWNER.equals(owner) || LEGACY_MOB_SPAWN_TYPE_OWNER.equals(owner)) {
                                     result.referencesStructureSpawnType = true;
                                 }
                                 maybeAddReference(owner, packageName, roots, result.referencedClassNames);
@@ -1559,20 +1598,28 @@ public final class StructureIndexExporter {
             if (fieldName == null || fieldName.isBlank()) {
                 return "";
             }
+            EntityType<?> entityType = findStaticEntityTypeField(EntityTypes.class, fieldName);
+            if (entityType == null) {
+                entityType = findStaticEntityTypeField(EntityType.class, fieldName);
+            }
+            if (entityType == null) {
+                return "";
+            }
+            Identifier entityId = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
+            return entityId != null ? entityId.toString() : "";
+        }
+
+        private static EntityType<?> findStaticEntityTypeField(Class<?> holderClass, String fieldName) {
             try {
-                Field field = EntityType.class.getDeclaredField(fieldName);
+                Field field = holderClass.getDeclaredField(fieldName);
                 if (!Modifier.isStatic(field.getModifiers())) {
-                    return "";
+                    return null;
                 }
                 field.setAccessible(true);
                 Object value = field.get(null);
-                if (!(value instanceof EntityType<?> entityType)) {
-                    return "";
-                }
-                Identifier entityId = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
-                return entityId != null ? entityId.toString() : "";
+                return value instanceof EntityType<?> entityType ? entityType : null;
             } catch (Exception exception) {
-                return "";
+                return null;
             }
         }
 

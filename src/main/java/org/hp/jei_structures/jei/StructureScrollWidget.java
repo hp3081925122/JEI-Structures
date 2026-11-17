@@ -3,7 +3,6 @@ package org.hp.jei_structures.jei;
 import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.common.Internal;
 import mezz.jei.common.gui.elements.ScalableDrawable;
-import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.inputs.IJeiInputHandler;
 import mezz.jei.api.gui.inputs.IJeiUserInput;
@@ -97,6 +96,11 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
     }
 
     @Override
+    public ScreenRectangle getScreenRectangle() {
+        return getArea();
+    }
+
+    @Override
     public void drawWidget(GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
         DebugRenderTiming.frame(recipe, contentSlots.size());
         long widgetStart = DebugRenderTiming.start();
@@ -133,27 +137,11 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         StructureRecipeCategory.drawScrollableContents(recipe, guiGraphics, 0, 0, scrollPixels, scrollPixels + height);
         DebugRenderTiming.end(DebugRenderTiming.Section.CONTENTS, contentsStart);
         long slotsStart = DebugRenderTiming.start();
-        drawSlots(guiGraphics, scrollPixels);
+        drawSlots(guiGraphics, mouseX, mouseY, scrollPixels);
         DebugRenderTiming.end(DebugRenderTiming.Section.SLOTS, slotsStart);
         poseStack.popMatrix();
         guiGraphics.disableScissor();
         DebugRenderTiming.end(DebugRenderTiming.Section.WIDGET, widgetStart);
-    }
-
-    @Override
-    public void getTooltip(ITooltipBuilder tooltip, double mouseX, double mouseY) {
-        if (!isMouseOverContent(mouseX, mouseY)) {
-            return;
-        }
-        long tooltipStart = DebugRenderTiming.start();
-        double adjustedMouseY = mouseY + getScrollPixels();
-        for (IRecipeSlotDrawable slot : contentSlots) {
-            if (slot.isMouseOver(mouseX, adjustedMouseY)) {
-                slot.getTooltip(tooltip);
-                break;
-            }
-        }
-        DebugRenderTiming.end(DebugRenderTiming.Section.TOOLTIP, tooltipStart);
     }
 
     @Override
@@ -214,7 +202,9 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
         return true;
     }
 
-    private void drawSlots(GuiGraphicsExtractor guiGraphics, int scrollPixels) {
+    private void drawSlots(GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY, int scrollPixels) {
+        boolean insideViewport = isMouseOverContent(mouseX, mouseY);
+        double adjustedMouseY = mouseY + scrollPixels;
         List<StructureRecipeCategory.SlotPlacement> placements = getSlotPlacements();
         int slotCount = Math.min(contentSlots.size(), placements.size());
         for (int index = 0; index < slotCount; index++) {
@@ -224,7 +214,8 @@ public final class StructureScrollWidget implements ISlottedRecipeWidget, IJeiIn
                 continue;
             }
             slot.setPosition(placement.x(), placement.y());
-            slot.draw(guiGraphics);
+            boolean hovered = insideViewport && slot.isMouseOver(mouseX, adjustedMouseY);
+            slot.draw(guiGraphics, hovered);
         }
     }
 

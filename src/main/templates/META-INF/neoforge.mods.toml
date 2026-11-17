@@ -30,6 +30,6 @@ side = "BOTH"
 [[dependencies."${mod_id}"]]
 modId = "jei"
 type = "required"
-versionRange = "[${jei_version},)"
+versionRange = "${jei_version_range}"
 ordering = "AFTER"
 side = "CLIENT"

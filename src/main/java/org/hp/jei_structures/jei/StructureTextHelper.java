@@ -1,6 +1,7 @@
 package org.hp.jei_structures.jei;
 
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
@@ -276,7 +277,7 @@ public final class StructureTextHelper {
     }
 
     private static boolean hasTranslation(String key) {
-        return I18n.exists(key);
+        return Language.getInstance().has(key);
     }
 
     private static String translate(String key, Object... args) {

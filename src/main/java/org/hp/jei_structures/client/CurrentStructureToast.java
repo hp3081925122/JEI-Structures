@@ -30,8 +30,8 @@ public final class CurrentStructureToast implements Toast {
 
     public static void show(String structureId) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.getToastManager() != null) {
-            minecraft.getToastManager().addToast(new CurrentStructureToast(structureId));
+        if (minecraft.gui != null && minecraft.gui.toastManager() != null) {
+            minecraft.gui.toastManager().addToast(new CurrentStructureToast(structureId));
         }
     }
 

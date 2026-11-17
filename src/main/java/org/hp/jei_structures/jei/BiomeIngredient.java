@@ -14,6 +14,8 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.data.AtlasIds;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.TooltipFlag;
 import org.hp.jei_structures.JeiStructures;
 import org.jetbrains.annotations.Nullable;
@@ -90,13 +92,13 @@ public final class BiomeIngredient implements IIngredientType<StructureBiomeIcon
     }
 
     @Override
-    @Deprecated(forRemoval = true)
+    @SuppressWarnings("removal")
     public List<Component> getTooltip(StructureBiomeIcon biome, TooltipFlag tooltipFlag) {
         return List.of();
     }
 
     @Override
-    public void getTooltip(ITooltipBuilder tooltip, StructureBiomeIcon biome, TooltipFlag tooltipFlag) {
+    public void getTooltip(ITooltipBuilder tooltip, StructureBiomeIcon biome, Item.TooltipContext context, @Nullable Player player, TooltipFlag tooltipFlag) {
         tooltip.add(getBiomeComponent(biome));
         Identifier id = getIdentifier(biome);
         if (id != null) {

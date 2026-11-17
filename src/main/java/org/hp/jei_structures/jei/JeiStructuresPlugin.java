@@ -65,14 +65,14 @@ public final class JeiStructuresPlugin implements IModPlugin {
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        registration.addRecipeCatalyst(StructureRecipeCategory.createStructureBlockStack(), StructureRecipeCategory.TYPE);
+        registration.addCraftingStation(StructureRecipeCategory.TYPE, StructureRecipeCategory.createStructureBlockStack());
     }
 
     @Override
     public void registerAdvanced(IAdvancedRegistration registration) {
         StructureRecipeLookupPlugin plugin = new StructureRecipeLookupPlugin();
         lookupPlugin = plugin;
-        registration.addTypedRecipeManagerPlugin(StructureRecipeCategory.TYPE, plugin);
+        registration.addSimpleRecipeManagerPlugin(StructureRecipeCategory.TYPE, plugin);
         JeiStructures.LOGGER.debug("Registered lazy structure recipe lookup plugin with {} recipes", getSharedRecipes().size());
     }
 

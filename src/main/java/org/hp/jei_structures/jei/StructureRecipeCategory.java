@@ -9,8 +9,8 @@ import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.gui.widgets.IRecipeExtrasBuilder;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
-import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
+import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -26,7 +26,7 @@ import java.util.List;
 
 public final class StructureRecipeCategory implements IRecipeCategory<StructureRecipe> {
 
-    public static final RecipeType<StructureRecipe> TYPE = RecipeType.create(JeiStructures.MODID, "structure_index", StructureRecipe.class);
+    public static final IRecipeType<StructureRecipe> TYPE = IRecipeType.create(JeiStructures.MODID, "structure_index", StructureRecipe.class);
 
     private static final int WIDTH = 188;
     private static final int MAX_HEIGHT = 170;
@@ -53,12 +53,12 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
     }
 
     @Override
-    public RecipeType<StructureRecipe> getRecipeType() {
+    public IRecipeType<StructureRecipe> getRecipeType() {
         return TYPE;
     }
 
     @Override
-    public Identifier getRegistryName(StructureRecipe recipe) {
+    public Identifier getIdentifier(StructureRecipe recipe) {
         return recipe != null ? recipe.getId() : null;
     }
 
@@ -89,16 +89,18 @@ public final class StructureRecipeCategory implements IRecipeCategory<StructureR
             for (StructureRecipe.SlotDisplay slot : block.slots()) {
                 var slotBuilder = builder.addSlot(slot.role(), 0, 0)
                         .setStandardSlotBackground()
-                        .setSlotName(slot.slotName())
-                        .addRichTooltipCallback((IRecipeSlotView recipeSlotView, ITooltipBuilder tooltip) -> {
-                            for (Component line : recipe.getSlotTooltips(slot.slotName())) {
-                                tooltip.add(line);
-                            }
-                        });
+                        .setSlotName(slot.slotName());
+                if (slot.kind() != StructureRecipe.SlotKind.BIOME) {
+                    slotBuilder.addRichTooltipCallback((IRecipeSlotView recipeSlotView, ITooltipBuilder tooltip) -> {
+                        for (Component line : recipe.getSlotTooltips(slot.slotName())) {
+                            tooltip.add(line);
+                        }
+                    });
+                }
                 if (slot.kind() == StructureRecipe.SlotKind.ITEM) {
-                    slotBuilder.addItemStack(slot.itemStack());
+                    slotBuilder.add(slot.itemStack());
                 } else if (slot.kind() == StructureRecipe.SlotKind.BIOME && slot.biome() != null) {
-                    slotBuilder.addIngredient(BiomeIngredient.INSTANCE, slot.biome())
+                    slotBuilder.add(BiomeIngredient.INSTANCE, slot.biome())
                             .setCustomRenderer(BiomeIngredient.INSTANCE, BiomeIngredient.INSTANCE);
                 }
             }
