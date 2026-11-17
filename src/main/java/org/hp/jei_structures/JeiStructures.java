@@ -17,7 +17,7 @@ public final class JeiStructures {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public JeiStructures(IEventBus modEventBus, ModContainer modContainer) {
-        modContainer.registerConfig(ModConfig.Type.COMMON, JeiStructuresConfig.COMMON_SPEC);
+        modContainer.registerConfig(ModConfig.Type.LOCAL, JeiStructuresConfig.COMMON_SPEC);
         modEventBus.addListener(JeiStructuresNetwork::register);
         DebugCaptureChunkTickets.TICKET_TYPES.register(modEventBus);
     }

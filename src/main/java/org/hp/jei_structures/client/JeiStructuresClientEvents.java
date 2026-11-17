@@ -13,7 +13,7 @@ public final class JeiStructuresClientEvents {
 
     public static final KeyMapping OPEN_CURRENT_STRUCTURE = new KeyMapping(
             "key.jei_structures.open_current_structure",
-            InputConstants.Type.KEYSYM,
+            InputConstants.Type.KEYBOARD,
             InputConstants.KEY_K,
             KeyMapping.Category.MISC
     );

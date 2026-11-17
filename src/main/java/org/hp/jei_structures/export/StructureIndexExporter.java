@@ -876,7 +876,7 @@ public final class StructureIndexExporter {
 
     private static Map<String, List<String>> collectBiomeDimensions(MinecraftServer server, Registry<Biome> biomeRegistry) {
         Map<String, LinkedHashSet<String>> dimensionsByBiome = new HashMap<>();
-        for (ServerLevel level : server.forgeGetWorldMap().values()) {
+        for (ServerLevel level : server.getAllLevels()) {
             Identifier dimensionId = level.dimension().identifier();
             for (var holder : level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes()) {
                 Identifier biomeId = biomeRegistry.getKey(holder.value());
@@ -1356,11 +1356,29 @@ public final class StructureIndexExporter {
     private static List<String> readTemplatePalette(CompoundTag root) {
         List<String> palette = new ArrayList<>();
         ListTag paletteTag = root.getListOrEmpty("palette");
+        if (paletteTag.isEmpty()) {
+            paletteTag = root.getList("palettes")
+                    .filter(list -> !list.isEmpty())
+                    .map(list -> list.getListOrEmpty(0))
+                    .orElse(paletteTag);
+        }
+        int resolvedCount = 0;
         for (int index = 0; index < paletteTag.size(); index++) {
             Optional<CompoundTag> paletteEntry = paletteTag.getCompound(index);
             if (paletteEntry.isPresent()) {
-                palette.add(paletteEntry.get().getStringOr("Name", ""));
+                CompoundTag entryTag = paletteEntry.get();
+                String blockId = entryTag.getStringOr("id", "");
+                if (blockId.isBlank()) {
+                    blockId = entryTag.getStringOr("Name", "");
+                }
+                if (!blockId.isBlank()) {
+                    resolvedCount++;
+                }
+                palette.add(blockId);
             }
+        }
+        if (!paletteTag.isEmpty() && resolvedCount == 0) {
+            JeiStructures.LOGGER.debug("Template palette resolved 0 block ids out of {} entries", paletteTag.size());
         }
         return palette;
     }

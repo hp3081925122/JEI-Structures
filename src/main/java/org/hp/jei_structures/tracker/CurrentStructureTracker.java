@@ -72,7 +72,7 @@ public final class CurrentStructureTracker {
             return;
         }
         String previous = LAST_SENT_STRUCTURE.getOrDefault(player.getUUID(), "");
-        String current = level.structureManager().hasAnyStructureAt(player.blockPosition())
+        String current = !level.structureManager().getAllStructuresAt(player.blockPosition()).isEmpty()
                 ? findCurrentStructure(level, player, structures, previous)
                 : "";
         if (!current.equals(previous)) {
@@ -96,7 +96,8 @@ public final class CurrentStructureTracker {
     }
 
     private static boolean contains(ServerLevel level, ServerPlayer player, Structure structure) {
-        StructureStart start = level.structureManager().getStructureWithPieceAt(player.blockPosition(), structure);
+        var pos = player.blockPosition();
+        StructureStart start = level.structureManager().getStructureWithPieceAt(pos.getX(), pos.getY(), pos.getZ(), structure);
         return start != null && start.isValid();
     }
 

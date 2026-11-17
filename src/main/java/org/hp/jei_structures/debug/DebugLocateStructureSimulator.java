@@ -3,10 +3,12 @@ package org.hp.jei_structures.debug;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
@@ -76,14 +78,16 @@ public final class DebugLocateStructureSimulator {
 
     private static StructureStart generate(ServerLevel level, ChunkGenerator generator, ChunkGeneratorStructureState structureState, StructureSet.StructureSelectionEntry entry, ChunkPos chunkPos) {
         Structure structure = entry.structure().value();
+        Climate.Sampler climateSampler = structureState.randomState().createClimateSampler(SamplerContext.builder().enableCaches().build());
         return structure.generate(
                 entry.structure(),
                 level.dimension(),
                 level.registryAccess(),
                 generator,
                 generator.getBiomeSource(),
+                climateSampler,
                 structureState.randomState(),
-                level.getStructureManager(),
+                level.getStructureTemplateManager(),
                 structureState.getLevelSeed(),
                 chunkPos,
                 0,

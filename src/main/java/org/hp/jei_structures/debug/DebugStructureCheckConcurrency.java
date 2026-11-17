@@ -6,6 +6,9 @@ import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.longs.LongSets;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.world.level.levelgen.structure.Structure;
 
@@ -67,6 +70,14 @@ public final class DebugStructureCheckConcurrency {
             copy.putAll(source);
         }
         return Long2ObjectMaps.synchronize(copy);
+    }
+
+    public static LongSet copyChunksWithoutStarts(LongSet source) {
+        LongOpenHashSet copy = new LongOpenHashSet();
+        if (source != null) {
+            copy.addAll(source);
+        }
+        return LongSets.synchronize(copy);
     }
 
     public static Map<Structure, Long2BooleanMap> copyFeatureChecks(Map<Structure, Long2BooleanMap> source) {

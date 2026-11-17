@@ -288,8 +288,8 @@ public final class DebugStructureCaptureManager {
             this.maxConcurrentLocates = JeiStructuresConfig.captureLocateThreads();
             this.locateTimeoutMillis = JeiStructuresConfig.captureLocateTimeoutSeconds() * 1000L;
             this.locateExecutor = createLocateExecutor(this.maxConcurrentLocates);
-            this.playerWasInvulnerable = player.isInvulnerable();
-            player.setInvulnerable(true);
+            this.playerWasInvulnerable = player.isPermanentlyInvulnerable();
+            player.setPermanentlyInvulnerable(true);
             DebugCaptureChunkTickets.clearCapturedChunks();
             DebugCaptureOptimizationGuard.enable(this.playerId);
             DebugStructureCheckConcurrency.enable();
@@ -480,7 +480,7 @@ public final class DebugStructureCaptureManager {
             if (chunk == null) {
                 return false;
             }
-            StructureStart actual = level.structureManager().getStartForStructure(SectionPos.bottomOf(chunk), currentTarget.structure(), chunk);
+            StructureStart actual = level.structureManager().getStartForStructure(currentTarget.structure(), chunk);
             if (actual == expected) {
                 return false;
             }
@@ -1091,12 +1091,11 @@ public final class DebugStructureCaptureManager {
             }
             long resolveStart = System.currentTimeMillis();
             StructureStart structureStart = level.structureManager().getStartForStructure(
-                    SectionPos.of(locatePos),
                     target.structure(),
                     level.getChunk(chunkPos.x(), chunkPos.z(), ChunkStatus.STRUCTURE_STARTS)
             );
             if (structureStart == null || !structureStart.isValid()) {
-                structureStart = level.structureManager().getStructureWithPieceAt(locatePos, target.structure());
+                structureStart = level.structureManager().getStructureWithPieceAt(locatePos.getX(), locatePos.getY(), locatePos.getZ(), target.structure());
             }
             boolean resolved = structureStart != null && structureStart.isValid();
             if (resolved) {
@@ -1506,7 +1505,7 @@ public final class DebugStructureCaptureManager {
             if (player == null) {
                 return;
             }
-            player.setInvulnerable(playerWasInvulnerable);
+            player.setPermanentlyInvulnerable(playerWasInvulnerable);
             ServerLevel level = server.getLevel(playerLevelKey);
             if (level == null) {
                 return;

@@ -381,7 +381,7 @@ public final class LootTableItemResolver {
                 continue;
             }
             try {
-                LootItemFunctions.ROOT_CODEC.parse(registryOps, functionElement).result().ifPresent(functions::add);
+                LootItemFunctions.DIRECT_CODEC.parse(registryOps, functionElement).result().ifPresent(functions::add);
             } catch (Exception exception) {
                 JeiStructures.LOGGER.debug("Failed to decode loot function: {}", functionElement, exception);
             }

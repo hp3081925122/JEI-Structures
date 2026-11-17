@@ -8,6 +8,7 @@ import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.levelgen.placement.FeaturePlacer;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import org.hp.jei_structures.debug.DebugCaptureChunkTickets;
 import org.hp.jei_structures.debug.DebugCaptureOptimizationGuard;
@@ -26,11 +27,11 @@ public abstract class ChunkGeneratorFeatureSkipMixin {
         }
     }
 
-    @WrapOperation(method = "applyBiomeDecoration", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/placement/PlacedFeature;placeWithBiomeCheck(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/world/level/chunk/ChunkGenerator;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Z"), remap = false)
-    private boolean jei_structures$skipCaptureFeature(PlacedFeature feature, WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos pos, Operation<Boolean> original) {
+    @WrapOperation(method = "applyBiomeDecoration", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/placement/FeaturePlacer;placeWithBiomeCheck(Lnet/minecraft/world/level/levelgen/placement/PlacedFeature;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Z"), remap = false)
+    private boolean jei_structures$skipCaptureFeature(FeaturePlacer placer, PlacedFeature feature, RandomSource random, BlockPos pos, Operation<Boolean> original) {
         if (DebugCaptureOptimizationGuard.shouldSkipFeatures()) {
             return false;
         }
-        return original.call(feature, level, generator, random, pos);
+        return original.call(placer, feature, random, pos);
     }
 }
